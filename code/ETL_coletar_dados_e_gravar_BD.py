@@ -66,9 +66,9 @@ def to_sql(dataframe, **kwargs):
 def getEnv(env):
     return os.getenv(env)
 
-print('Especifique o local do seu arquivo de configuração ".env". Por exemplo: C:\...\Receita_Federal_do_Brasil_-_Dados_Publicos_CNPJ\code')
+#print('Especifique o local do seu arquivo de configuração ".env". Por exemplo: C:\...\Receita_Federal_do_Brasil_-_Dados_Publicos_CNPJ\code')
 # C:\Aphonso_C\Git\Receita_Federal_do_Brasil_-_Dados_Publicos_CNPJ\code
-local_env = input()
+local_env = 'D:\\Repositorio\\00_Programação\\06 - DADOS_RFB\\DADOS_RFB\\code'
 dotenv_path = os.path.join(local_env, '.env')
 load_dotenv(dotenv_path=dotenv_path)
 
@@ -229,6 +229,7 @@ database=getEnv('DB_NAME')
 
 # Conectar:
 engine = create_engine('postgresql://'+user+':'+passw+'@'+host+':'+port+'/'+database)
+print(engine)
 conn = psycopg2.connect('dbname='+database+' '+'user='+user+' '+'host='+host+' '+'port='+port+' '+'password='+passw)
 cur = conn.cursor()
 
