@@ -3,7 +3,6 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine
 import bs4 as bs
 import ftplib
-import gzip
 import os
 import pandas as pd
 import psycopg2
@@ -13,7 +12,7 @@ import time
 import requests
 import urllib.request
 import wget
-import zipfile
+
 
 
 #%%
@@ -23,7 +22,7 @@ def getEnv(env):
 
 print('Especifique o local do seu arquivo de configuração ".env". Por exemplo: C:\...\Receita_Federal_do_Brasil_-_Dados_Publicos_CNPJ\code')
 # C:\Aphonso_C\Git\Receita_Federal_do_Brasil_-_Dados_Publicos_CNPJ\code
-local_env = input()
+local_env = 'D:\\Repositorio\\00_Programação\\06 - DADOS_RFB\\DADOS_RFB\\code'
 dotenv_path = os.path.join(local_env, '.env')
 load_dotenv(dotenv_path=dotenv_path)
 
@@ -35,12 +34,21 @@ passw=getEnv('DB_PASSWORD')
 host=getEnv('DB_HOST')
 port=getEnv('DB_PORT')
 database=getEnv('DB_NAME')
+try:
+    # Conectar:
+    conn = psycopg2.connect('dbname='+database+' '+'user='+user+' '+'host='+host+' '+'port='+port+' '+'password='+passw)
+    cur = conn.cursor()
+    cur.execute("select * from empresa")
 
-# Conectar:
-engine = create_engine('postgresql://'+user+':'+passw+'@'+host+':'+port+'/'+database)
-conn = psycopg2.connect('dbname='+database+' '+'user='+user+' '+'host='+host+' '+'port='+port+' '+'password='+passw)
-cur = conn.cursor()
+    resultado = cur.fetchall()
 
+    for res in resultado:
+        print(res)
+except (Exception, psycopg2.DatabaseError) as error:
+    print(error)
+finally:
+    conn.close()
+    
 # empresa.columns = ['cnpj_basico', 
 #                    'razao_social', 
 #                    'natureza_juridica', 
@@ -122,5 +130,5 @@ cur = conn.cursor()
 #estabelecimento.situacao_especial',
 
 
-select estabelecimento.cnpj_basico, estabelecimento.cnpj_ordem, estabelecimento.cnpj_dv, empresa.razao_social, estabelecimento.nome_fantasia, empresa.porte_empresa, estabelecimento.situacao_cadastral, estabelecimento.tipo_logradouro, estabelecimento.logradouro, estabelecimento.numero, estabelecimento.complemento, estabelecimento.bairro, estabelecimento.cep, estabelecimento.uf, estabelecimento.municipio, estabelecimento.ddd_1, estabelecimento.telefone_1, estabelecimento.ddd_2, estabelecimento.telefone_2, estabelecimento.correio_eletronico, estabelecimento.situacao_especial from estabelecimento [inner] join empresa on estabelecimento.cnpj_basico=empresa.cnpj_basico
-where estabelecimento.nome_fantasia = '%Condomínio%' or '%Edificio%' or '%Residencial%'
+#select estabelecimento.cnpj_basico, estabelecimento.cnpj_ordem, estabelecimento.cnpj_dv, empresa.razao_social, estabelecimento.nome_fantasia, empresa.porte_empresa, estabelecimento.situacao_cadastral, estabelecimento.tipo_logradouro, estabelecimento.logradouro, estabelecimento.numero, estabelecimento.complemento, estabelecimento.bairro, estabelecimento.cep, estabelecimento.uf, estabelecimento.municipio, estabelecimento.ddd_1, estabelecimento.telefone_1, estabelecimento.ddd_2, estabelecimento.telefone_2, estabelecimento.correio_eletronico, estabelecimento.situacao_especial from estabelecimento [inner] join empresa on estabelecimento.cnpj_basico=empresa.cnpj_basico
+#where estabelecimento.nome_fantasia = '%Condomínio%' or '%Edificio%' or '%Residencial%'

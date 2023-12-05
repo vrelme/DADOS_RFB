@@ -1,7 +1,7 @@
 beautifulsoup4>=4.12.2
 bs4>=0.0.1
 greenlet>=3.0.1
-importlib-metadata>=6.9.0
+importlib-metadata>=3.17.0
 lxml>=4.9.3
 numpy>=1.26.2
 pandas>=2.1.3
