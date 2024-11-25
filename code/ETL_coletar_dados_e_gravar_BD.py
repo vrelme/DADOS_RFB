@@ -14,6 +14,7 @@ import requests
 import urllib.request
 import wget
 import zipfile
+import mysql.connector
 
 
 def check_diff(url, file_name):
@@ -228,7 +229,8 @@ port=getEnv('DB_PORT')
 database=getEnv('DB_NAME')
 
 # Conectar:
-engine = create_engine('postgresql://'+user+':'+passw+'@'+host+':'+port+'/'+database)
+#engine = create_engine('postgresql://'+user+':'+passw+'@'+host+':'+port+'/'+database)
+engine = create_engine(f'mysql+mysqlconnector://{user}:{passw}@{host}:{port}/{database}')
 print(engine)
 conn = psycopg2.connect('dbname='+database+' '+'user='+user+' '+'host='+host+' '+'port='+port+' '+'password='+passw)
 cur = conn.cursor()
