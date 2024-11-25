@@ -39,8 +39,8 @@ try:
     conn = psycopg2.connect('dbname='+database+' '+'user='+user+' '+'host='+host+' '+'port='+port+' '+'password='+passw)
     cur = conn.cursor()
     num = 0
-    cur.execute("select ES.cnpj_basico FROM estabelecimento ES INNER JOIN empresa EM on ES.cnpj_basico=EM.cnpj_basico INNER JOIN munic MU on MU.codigo=ES.municipio WHERE (ES.nome_fantasia LIKE '%Condomínio%' or ES.nome_fantasia LIKE '%Edificio%' or ES.nome_fantasia LIKE '%Residencial%') AND MU.descricao = 'OSASCO' AND ES.cep LIKE '%06122%'")
-    #, ES.cnpj_ordem, ES.cnpj_dv, EM.razao_social, ES.nome_fantasia, EM.porte_empresa, ES.situacao_cadastral, ES.tipo_logradouro, ES.logradouro, ES.numero, ES.complemento, ES.bairro, ES.cep, ES.uf, MU.descricao, ES.ddd_1, ES.telefone_1, ES.ddd_2, ES.telefone_2, ES.correio_eletronico, ES.situacao_especial
+    cur.execute("select ES.cnpj_basico FROM estabelecimento ES INNER JOIN empresa EM on ES.cnpj_basico=EM.cnpj_basico INNER JOIN munic MU on MU.codigo=ES.municipio WHERE (ES.nome_fantasia LIKE '%Condomínio%' or ES.nome_fantasia LIKE '%Edificio%' or ES.nome_fantasia LIKE '%Residencial%') AND MU.descricao = 'OSASCO'")
+    #, ES.cnpj_ordem, ES.cnpj_dv, EM.razao_social, ES.nome_fantasia, EM.porte_empresa, ES.situacao_cadastral, ES.tipo_logradouro, ES.logradouro, ES.numero, ES.complemento, ES.bairro, ES.cep, ES.uf, MU.descricao, ES.ddd_1, ES.telefone_1, ES.ddd_2, ES.telefone_2, ES.correio_eletronico, ES.situacao_especial AND ES.cep LIKE '%06122%'
     resultado = cur.fetchall()
     
     for res in resultado:
