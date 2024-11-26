@@ -15,7 +15,20 @@ import urllib.request
 import wget
 import zipfile
 import mysql.connector
+import http.server
+import socketserver
 
+port = 8000
+
+# Caminho dos arquivos
+Diretorio = "d:/OPERACAO/INPUT_FILES"
+
+# Arquivos no site
+ArqSite = http.server.SimpleHTTPRequestHandler
+ArqSite.directory = Diretorio
+
+with socketserver.TCPServer(("", port), ArqSite) as httpd:
+    print("Site criado")
 
 def check_diff(url, file_name):
     '''
@@ -78,7 +91,7 @@ local_env = 'D:\\Repositorio\\00_Programação\\06 - DADOS_RFB\\DADOS_RFB\\code'
 dotenv_path = os.path.join(local_env, '.env')
 load_dotenv(dotenv_path=dotenv_path)
 
-dados_rf = 'D:\\OPERACAO\\INPUT_FILES'
+dados_rf = 'http://localhost:8000'
 
 # %%
 # Read details from ".env" file:
