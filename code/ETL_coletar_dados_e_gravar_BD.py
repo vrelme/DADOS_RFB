@@ -15,20 +15,6 @@ import urllib.request
 import wget
 import zipfile
 import mysql.connector
-import http.server
-import socketserver
-
-port = 8000
-
-# Caminho dos arquivos
-Diretorio = "d:/OPERACAO/INPUT_FILES"
-
-# Arquivos no site
-ArqSite = http.server.SimpleHTTPRequestHandler
-ArqSite.directory = Diretorio
-
-with socketserver.TCPServer(("", port), ArqSite) as httpd:
-    print("Site criado")
 
 def check_diff(url, file_name):
     '''
@@ -91,7 +77,7 @@ local_env = 'D:\\Repositorio\\00_Programação\\06 - DADOS_RFB\\DADOS_RFB\\code'
 dotenv_path = os.path.join(local_env, '.env')
 load_dotenv(dotenv_path=dotenv_path)
 
-dados_rf = 'http://localhost:8000'
+#dados_rf = 'http://localhost:8000'
 
 # %%
 # Read details from ".env" file:
@@ -112,21 +98,21 @@ except:
     print('Erro na definição dos diretórios, verifique o arquivo ".env" ou o local informado do seu arquivo de configuração.')
 
 # %%
-raw_html = urllib.request.urlopen(dados_rf)
-raw_html = raw_html.read()
+#raw_html = urllib.request.urlopen(dados_rf)
+#raw_html = raw_html.read()
 
 # Formatar página e converter em string
-page_items = bs.BeautifulSoup(raw_html, 'lxml')
-html_str = str(page_items)
+#page_items = bs.BeautifulSoup(raw_html, 'lxml')
+#html_str = str(page_items)
 
 # Obter arquivos
 Files = []
 text = '.zip'
-for m in re.finditer(text, html_str):
+for m in re.finditer(text, html_str): # type: ignore
     i_start = m.start()-40
     i_end = m.end()
-    i_loc = html_str[i_start:i_end].find('href=')+6
-    Files.append(html_str[i_start+i_loc:i_end])
+    i_loc = html_str[i_start:i_end].find('href=')+6 # type: ignore
+    Files.append(html_str[i_start+i_loc:i_end]) # type: ignore
 
 # Correcao do nome dos arquivos devido a mudanca na estrutura do HTML da pagina - 31/07/22 - Aphonso Rafael
 Files_clean = []
@@ -170,7 +156,7 @@ for l in Files:
     i_l += 1
     print('Baixando arquivo:')
     print(str(i_l) + ' - ' + l)
-    url = dados_rf+l
+    url = dados_rf+l # type: ignore
     file_name = os.path.join(output_files, l)
     if check_diff(url, file_name):
         wget.download(url, out=output_files, bar=bar_progress)
