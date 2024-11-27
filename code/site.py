@@ -2,14 +2,14 @@ import http.server
 import socketserver
 import os
 
-# Caminho dos arquivos
-DIRECTORY = os.path.abspath("D:\OPERACAO\INPUT_FILES")
-print(DIRECTORY)
+# Caminho absoluto dos arquivos
+DIRECTORY = os.path.abspath("D:/OPERACAO/INPUT_FILES")
 
 # Arquivos no site
-Handler = http.server.SimpleHTTPRequestHandler
-Handler.directory = DIRECTORY
+class Handler(http.server.SimpleHTTPRequestHandler):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, directory=DIRECTORY, **kwargs)
 
 with socketserver.TCPServer(("", 8000), Handler) as httpd:
     print("Site criado")
-    httpd.serve_forever()  # Adiciona esta linha para iniciar o servidor
+    httpd.serve_forever()
