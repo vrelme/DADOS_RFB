@@ -233,21 +233,27 @@ for i in range(len(Items)):
 # %%
 # Conectar no banco de dados:
 # Dados da conexão com o BD
+print(getEnv('DB_HOST'))
+print(getEnv('DB_USER'))
+print(getEnv('DB_PASSWORD'))
+print(getEnv('DB_NAME'))
+print(getEnv('DB_PORT'))
+
 mydb = mysql.connector.connect(
-    user=getEnv('DB_USER'),
-    passw=getEnv('DB_PASSWORD'),
     host=getEnv('DB_HOST'),
+    user=getEnv('DB_USER'),
+    password=getEnv('DB_PASSWORD'),
+    database=getEnv('DB_NAME'),
     port=getEnv('DB_PORT'),
-    database=getEnv('DB_NAME')
+    charset="utf8mb4"
 )
 
 # Conectar:
 
 engine = create_engine(
-    f'mysql+mysqlconnector://{user}:{passw}@{host}:{port}/{database}')
-
+    f'mysql+mysqlconnector://{user}:{password}@{host}:{port}/{database}')
 conn = mydb.connect('dbname='+database+' '+'user='+user +
-                    ' '+'host='+host+' '+'port='+port+' '+'password='+passw)
+                    ' '+'host='+host+' '+'port='+port+' '+'password='+password)
 cur = conn.cursor()
 
 # %%
