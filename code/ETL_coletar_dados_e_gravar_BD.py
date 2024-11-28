@@ -250,10 +250,8 @@ mydb = mysql.connector.connect(
 
 # Conectar:
 
-engine = create_engine(
-    f'mysql+mysqlconnector://{user}:{password}@{host}:{port}/{database}')
-conn = mydb.connect('dbname='+database+' '+'user='+user +
-                    ' '+'host='+host+' '+'port='+port+' '+'password='+password)
+engine = create_engine(f'mysql+mysqlconnector://{user}:{password}@{host}:{port}/{database}')
+conn = mydb.connect('dbname='+database+' '+'user='+user +' '+'host='+host+' '+'port='+port+' '+'password='+password)
 cur = conn.cursor()
 
 # %%
