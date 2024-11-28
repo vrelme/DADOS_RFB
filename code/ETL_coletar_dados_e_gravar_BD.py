@@ -99,7 +99,7 @@ try:
 except:
     pass
     print('Erro na definição dos diretórios, verifique o arquivo ".env" ou o local informado do seu arquivo de configuração.')
-
+print('Linha 102 :'+ dados_rf)
 # %%
 raw_html = urllib.request.urlopen(dados_rf)
 raw_html = raw_html.read()
