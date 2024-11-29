@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import dateo
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
