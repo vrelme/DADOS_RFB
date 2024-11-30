@@ -241,22 +241,24 @@ for i in range(len(Items)):
 # Dados da conexão com o BD
 logging.info('Acesso Banco de dados')
 
+con = mysql.connector.connect(host=getEnv('DB_HOST'),database=getEnv('DB_NAME'), user=getEnv('DB_USER'))
+
+if conn.is_connected():
+
 try:
-    mydb = mysql.connector.connect(
-        host=getEnv('DB_HOST'),
-        user=getEnv('DB_USER'),
-        password=getEnv('DB_PASSWORD'),
-        database=getEnv('DB_NAME'),
-        port=getEnv('DB_PORT')
-    )
+    #mydb = mysql.connector.connect(
+    #    host=getEnv('DB_HOST'),
+    #    user=getEnv('DB_USER'),
+    #    password=getEnv('DB_PASSWORD'),
+    #    database=getEnv('DB_NAME'),
+    #    port=getEnv('DB_PORT')
+    #)
 
     engine = mydb.cursor()
 
     # Conectar
     engine = create_engine(f'mysql+mysqlconnector://{getEnv('DB_USER')}:{getEnv('DB_PASSWORD')}@{getEnv('DB_HOST')}/{getEnv('DB_NAME')}, pool_recycle={getEnv('DB_PORT')}')
-    conn = mydb.connect('dbname=' + getEnv('DB_NAME') + ' '+'user=' + getEnv('DB_USER') +
-                    ' '+'host=' + getEnv('DB_HOST') + ' ' + 'port=' + getEnv('DB_PORT') + ' '+'password='+ getEnv('DB_PASSWORD'))
-    cur = conn.cursor()
+
 except mysql.connector.Error as err:
     print(f"Erro ao conectar ao banco de dados")
     logging.info('Erro ao conectar ao banco de dados: {err}')
