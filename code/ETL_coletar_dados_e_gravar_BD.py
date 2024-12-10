@@ -2,31 +2,32 @@ from datetime import date
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
-import mysql.connector
 import bs4 as bs
 import dask.dataframe as dd
 import ftplib
 import getenv
 import gzip
+import logging
+import lxml
+import mysql.connector
+import numpy as np
 import os
-#import pandas
+import pandas as pd
 import re
+import requests
+import sql
+import sqlalchemy
 import sys
 import time
-import requests
+import urllib.parse
 import urllib.request
 import wget
 import zipfile
-import lxml
-import urllib.parse
-import logging
-import sql
 
 cnpj_basico=''
 # Gerar Log
 logging.basicConfig(filename='DADOS_RFB.log', level=logging.INFO)
 logging.info('Iniciando o processo de carga')
-
 
 def check_diff(url, file_name):
     '''
@@ -56,7 +57,6 @@ def makedirs(path):
 
 # %%
 
-
 def to_sql(dataframe, **kwargs):
     '''
     Quebra em pedacos a tarefa de inserir registros no banco
@@ -66,13 +66,21 @@ def to_sql(dataframe, **kwargs):
     total = len(dataframe)
     name = kwargs.get('name')
 
-    def chunker(df):
-        return (df[i:i + size] for i in range(0, len(df), size))
-    
+def chunker(df):
+    return (df[i:i + size] for i in range(0, len(df), size))
     print(chunker)
-
+    
     for df_chunk in (dataframe[i:i + size] for i in range(0, len(dataframe),size)):
         df_chunk.to_sql(**kwargs)
+
+    # Gravar dados no banco:
+    # Empresa
+def process_and_insert_chunk(df_chunk, con, table_name):
+    # Processo para inserir no banco de dados
+    df_chunk.to_sql(table_name, con, if_exists='append', index=False)
+    print('Tabela' + table_name + ' inserido com sucesso no banco de dados!')
+
+
 
 # %%
 # Ler arquivo de configuração de ambiente # https://dev.to/jakewitcher/using-env-files-for-environment-variables-in-python-applications-55a1
@@ -264,28 +272,37 @@ cur.execute('DROP TABLE IF EXISTS empresa;')
 conexao.commit()
 for e in range(0, len(arquivos_empresa)):
     print('Trabalhando no arquivo: '+arquivos_empresa[e]+' [...]')
-    #empresa = dd.DataFrame(columns=[0, 1, 2, 3, 4, 5, 6])
+    column_names = ['cnpj_basico', 'razao_social', 'natureza_juridica', 'qualificacao_responsavel', 'capital_social', 'porte_empresa', 'ente_federativo_responsavel']
+    column_data = {name: [] for name in column_names}
+    num_particoes = 10
+    divisoes = np.linspace(0, 10000, num=num_particoes + 1).tolist()
+    empresa = dd.DataFrame(column_data, name='empresa_dataframe', meta={'cnpj_basico': 'object', 'razao_social': 'object', 'natureza_juridica': 'object', 'qualificacao_responsavel': 'object', '': 'object', 'porte_empresa': 'object', 'ente_federativo_responsavel': 'object'}, divisions=divisoes)
+    # Reparticionar em 10 partições
+    empresa.columns = column_names
     extracted_file_path = os.path.join(extracted_files, arquivos_empresa[e])
-    empresa = dd.read_csv(filepath_or_buffer=extracted_file_path,
+    empresa = dd.read_csv(extracted_file_path,
                           sep=';',
                           # nrows=100,
                           skiprows=0,
                           header=None,
                           dtype='object',
-                          encoding='utf-8')
+                          encoding='latin1')
+
+    # Replace "," por "."
+    if 'capital_social' in empresa.columns:
+        # Apply the transformation if the column exists
+        empresa['capital_social'] = empresa['capital_social'].apply(lambda x: x.replace(',', '.'))
+        empresa['capital_social'] = empresa['capital_social'].astype(float)
+    else:
+        print("A coluna 'capital_social' não existe no DataFrame.")
     # Tratamento do arquivo antes de inserir na base:
     empresa = empresa.reset_index()
     del empresa['index']
-    # Renomear colunas
-    empresa = empresa.rename(columns={0: 'cnpj_basico', 1: 'razao_social', 2: 'natureza_juridica', 3: 'qualificacao_responsavel', 4: 'capital_social', 5: 'porte_empresa', 6: 'ente_federativo_responsavel'})
-    # Replace "," por "."
-    empresa['capital_social'] = empresa['capital_social'].apply(lambda x: x.replace(',', '.'))
-    empresa['capital_social'] = empresa['capital_social'].astype(float)
 
-    # Gravar dados no banco:
-    # Empresa
-    to_sql(empresa, name='empresa', con=conexao, if_exists='append', index=False)
-    print('Arquivo ' + arquivos_empresa[e] + ' inserido com sucesso no banco de dados!')
+    for i in range(empresa.npartitions):
+        df_chunk = empresa.get_partition(i)
+        process_and_insert_chunk(df_chunk, conexao,'empresa')
+
     try:
         del empresa
     except:
@@ -327,7 +344,7 @@ try:
                                   skiprows=0,
                                   header=None,
                                   dtype='object',
-                                  encoding='utf-8',
+                                  encoding='latin1',
                                   )
 
         # Tratamento do arquivo antes de inserir na base:
@@ -412,7 +429,7 @@ try:
                          skiprows=0,
                          header=None,
                          dtype='object',
-                         encoding='utf-8',
+                         encoding='latin1',
                          )
 
         # Tratamento do arquivo antes de inserir na base:
@@ -496,7 +513,7 @@ try:
                               skiprows=skiprows,
                               header=None,
                               dtype='object',
-                              encoding='utf-8',
+                              encoding='latin1',
                               )
 
             # Tratamento do arquivo antes de inserir na base:
@@ -560,7 +577,7 @@ try:
         extracted_file_path = os.path.join(extracted_files, arquivos_cnae[e])
         cnae = dd.DataFrame(columns=[1, 2])
         cnae = dd.read_csv(filepath_or_buffer=extracted_file_path, sep=';',
-                       skiprows=0, header=None, dtype='object', encoding='utf-8')
+                       skiprows=0, header=None, dtype='object', encoding='latin1')
 
         # Tratamento do arquivo antes de inserir na base:
         cnae = cnae.reset_index()
@@ -610,7 +627,7 @@ try:
         extracted_file_path = os.path.join(extracted_files, arquivos_moti[e])
         moti = dd.DataFrame(columns=[1, 2])
         moti = dd.read_csv(filepath_or_buffer=extracted_file_path, sep=';',
-                       skiprows=0, header=None, dtype='object', encoding='utf-8')
+                       skiprows=0, header=None, dtype='object', encoding='latin1')
 
         # Tratamento do arquivo antes de inserir na base:
         moti = moti.reset_index()
@@ -660,7 +677,7 @@ try:
         extracted_file_path = os.path.join(extracted_files, arquivos_munic[e])
         munic = dd.DataFrame(columns=[1, 2])
         munic = dd.read_csv(filepath_or_buffer=extracted_file_path, sep=';',
-                        skiprows=0, header=None, dtype='object', encoding='utf-8')
+                        skiprows=0, header=None, dtype='object', encoding='latin1')
 
         # Tratamento do arquivo antes de inserir na base:
         munic = munic.reset_index()
@@ -710,7 +727,7 @@ try:
         extracted_file_path = os.path.join(extracted_files, arquivos_natju[e])
         natju = dd.DataFrame(columns=[1, 2])
         natju = dd.read_csv(filepath_or_buffer=extracted_file_path, sep=';',
-                        skiprows=0, header=None, dtype='object', encoding='utf-8')
+                        skiprows=0, header=None, dtype='object', encoding='latin1')
 
         # Tratamento do arquivo antes de inserir na base:
         natju = natju.reset_index()
@@ -756,7 +773,7 @@ try:
         extracted_file_path = os.path.join(extracted_files, arquivos_pais[e])
         pais = dd.DataFrame(columns=[1, 2])
         pais = dd.read_csv(filepath_or_buffer=extracted_file_path, sep=';',
-                       skiprows=0, header=None, dtype='object', encoding='utf-8')
+                       skiprows=0, header=None, dtype='object', encoding='latin1')
 
         # Tratamento do arquivo antes de inserir na base:
         pais = pais.reset_index()
@@ -805,7 +822,7 @@ try:
         extracted_file_path = os.path.join(extracted_files, arquivos_quals[e])
         quals = dd.DataFrame(columns=[1, 2])
         quals = dd.read_csv(filepath_or_buffer=extracted_file_path, sep=';',
-                        skiprows=0, header=None, dtype='object', encoding='utf-8')
+                        skiprows=0, header=None, dtype='object', encoding='latin1')
 
         # Tratamento do arquivo antes de inserir na base:
         quals = quals.reset_index()
@@ -879,6 +896,6 @@ if cnpj_basico!="":
     # %%
     print("""Processo 100% finalizado! Você já pode usar seus dados no BD!
      - Desenvolvido por: Aphonso Henrique do Amaral Rafael
-     - Adaptafo por: Vander Ribeiro Elme
+     - Adaptado por: Vander Ribeiro Elme
     - Contribua com esse projeto aqui: https://github.com/aphonsoar/Receita_Federal_do_Brasil_-_Dados_Publicos_CNPJ
     """)
