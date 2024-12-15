@@ -31,13 +31,6 @@ i=0
 # Gerar Log
 logging.basicConfig(filename='DADOS_RFB.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logging.info(f"Iniciando o processo de carga")
-shutdown_event = threading.Event()  # Flag to signal shutdown
-
-def my_thread_function():
-    while not shutdown_event.is_set():
-        # Perform thread tasks here
-        time.sleep(1)  # Simulate thread work
-        logging.info("Thread Ativo")
 
 def check_diff(url, file_name):
     '''
@@ -268,24 +261,24 @@ for i in range(len(Items)):
 # Conectar no banco de dados:
 # Dados da conexão com o BD
 logging.info(f"Acesso Banco de dados")
-
-conexao = mysql.connector.connect(
-    host=os.getenv('db_host'),
-    user=os.getenv('db_user'),
-    password=os.getenv('db_password'),
-    database=os.getenv('db_name')   
-)
 try:
+    conexao = mysql.connector.connect(
+                host=os.getenv('db_host'),
+                user=os.getenv('db_user'),
+                password=os.getenv('db_password'),
+                database=os.getenv('db_name')   
+                )
+
     cur = conexao.cursor()
 
-    if conexao.is_connected():
-        logging.info(f"Conexao Executada")
-    else:
-        conexao.close()
-        logging.info(f"Conexao falhou") 
-except:
+except mysql.connector.Error as err:
+    print(f"Erro na thread: {e}")
     logging.info(f"Conexao falhou")
-    conexao.close()
+
+# Criação e inicialização da thread
+thread = threading.Thread(target=my_thread_function)
+thread.start()
+
 # %%
 # Arquivos de empresa:
 empresa_insert_start = time.time()
@@ -981,7 +974,8 @@ if cnpj_basico!="":
     index_end = time.time()
     index_time = round(index_end - index_start)
     print('Tempo para criar os índices (em segundos): ' + str(index_time))
-    conexao.close()
+    # Encerramento da thread (exemplo simplificado)
+    thread.join()
     # %%
     print("""Processo 100% finalizado! Você já pode usar seus dados no BD!
      - Desenvolvido por: Aphonso Henrique do Amaral Rafael

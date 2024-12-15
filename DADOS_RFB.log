@@ -1,135 +1,43 @@
-2024-12-15 02:25:18,226 - INFO - Iniciando o processo de carga
-2024-12-15 02:25:23,619 - INFO - Acesso ao site
-2024-12-15 02:25:25,741 - INFO - Download arquivos
-2024-12-15 02:26:41,564 - INFO - Descompactando arquivo
-2024-12-15 02:26:41,583 - INFO - Descompactando arquivo
-2024-12-15 02:26:48,265 - INFO - Descompactando arquivo
-2024-12-15 02:26:50,174 - INFO - Descompactando arquivo
-2024-12-15 02:26:51,713 - INFO - Descompactando arquivo
-2024-12-15 02:26:53,264 - INFO - Descompactando arquivo
-2024-12-15 02:26:54,833 - INFO - Descompactando arquivo
-2024-12-15 02:26:56,922 - INFO - Descompactando arquivo
-2024-12-15 02:26:59,013 - INFO - Descompactando arquivo
-2024-12-15 02:27:00,627 - INFO - Descompactando arquivo
-2024-12-15 02:27:02,669 - INFO - Descompactando arquivo
-2024-12-15 02:27:04,386 - INFO - Descompactando arquivo
-2024-12-15 02:27:41,682 - INFO - Descompactando arquivo
-2024-12-15 02:27:56,659 - INFO - Descompactando arquivo
-2024-12-15 02:28:10,954 - INFO - Descompactando arquivo
-2024-12-15 02:28:25,718 - INFO - Descompactando arquivo
-2024-12-15 02:28:41,264 - INFO - Descompactando arquivo
-2024-12-15 02:28:56,027 - INFO - Descompactando arquivo
-2024-12-15 02:29:10,485 - INFO - Descompactando arquivo
-2024-12-15 02:29:25,863 - INFO - Descompactando arquivo
-2024-12-15 02:29:40,732 - INFO - Descompactando arquivo
-2024-12-15 02:29:55,909 - INFO - Descompactando arquivo
-2024-12-15 02:29:55,914 - INFO - Descompactando arquivo
-2024-12-15 02:29:55,921 - INFO - Descompactando arquivo
-2024-12-15 02:29:55,924 - INFO - Descompactando arquivo
-2024-12-15 02:29:55,928 - INFO - Descompactando arquivo
-2024-12-15 02:29:55,932 - INFO - Descompactando arquivo
-2024-12-15 02:30:16,561 - INFO - Descompactando arquivo
-2024-12-15 02:30:25,367 - INFO - Descompactando arquivo
-2024-12-15 02:30:26,268 - INFO - Descompactando arquivo
-2024-12-15 02:30:30,176 - INFO - Descompactando arquivo
-2024-12-15 02:30:31,450 - INFO - Descompactando arquivo
-2024-12-15 02:30:34,683 - INFO - Descompactando arquivo
-2024-12-15 02:30:37,406 - INFO - Descompactando arquivo
-2024-12-15 02:30:39,001 - INFO - Descompactando arquivo
-2024-12-15 02:30:41,931 - INFO - Descompactando arquivo
-2024-12-15 02:30:45,950 - INFO - Descompactando arquivo
-2024-12-15 02:30:47,203 - INFO - LER E INSERIR DADOS
-2024-12-15 02:30:47,204 - INFO - Separar arquivos
-2024-12-15 10:57:32,139 - INFO - Acesso Banco de dados
-2024-12-15 10:58:43,651 - INFO - Iniciando o processo de carga
-2024-12-15 10:58:43,654 - INFO - Acesso ao site
-2024-12-15 10:58:45,798 - INFO - Download arquivos
-2024-12-15 11:00:01,678 - INFO - Descompactando arquivo
-2024-12-15 11:00:01,700 - INFO - Descompactando arquivo
-2024-12-15 11:00:08,574 - INFO - Descompactando arquivo
-2024-12-15 11:00:10,953 - INFO - Descompactando arquivo
-2024-12-15 11:00:12,485 - INFO - Descompactando arquivo
-2024-12-15 11:00:14,164 - INFO - Descompactando arquivo
-2024-12-15 11:00:15,737 - INFO - Descompactando arquivo
-2024-12-15 11:00:17,962 - INFO - Descompactando arquivo
-2024-12-15 11:00:20,512 - INFO - Descompactando arquivo
-2024-12-15 11:00:22,129 - INFO - Descompactando arquivo
-2024-12-15 11:00:23,949 - INFO - Descompactando arquivo
-2024-12-15 11:00:25,954 - INFO - Descompactando arquivo
-2024-12-15 11:01:03,615 - INFO - Descompactando arquivo
-2024-12-15 11:01:17,566 - INFO - Descompactando arquivo
-2024-12-15 11:01:32,836 - INFO - Descompactando arquivo
-2024-12-15 11:01:46,406 - INFO - Descompactando arquivo
-2024-12-15 11:02:03,065 - INFO - Descompactando arquivo
-2024-12-15 11:02:17,433 - INFO - Descompactando arquivo
-2024-12-15 11:02:31,940 - INFO - Descompactando arquivo
-2024-12-15 11:02:46,242 - INFO - Descompactando arquivo
-2024-12-15 11:03:02,710 - INFO - Descompactando arquivo
-2024-12-15 11:03:16,996 - INFO - Descompactando arquivo
-2024-12-15 11:03:16,999 - INFO - Descompactando arquivo
-2024-12-15 11:03:17,002 - INFO - Descompactando arquivo
-2024-12-15 11:03:17,004 - INFO - Descompactando arquivo
-2024-12-15 11:03:17,006 - INFO - Descompactando arquivo
-2024-12-15 11:03:17,010 - INFO - Descompactando arquivo
-2024-12-15 11:03:38,624 - INFO - Descompactando arquivo
-2024-12-15 11:03:47,138 - INFO - Descompactando arquivo
-2024-12-15 11:03:50,068 - INFO - Descompactando arquivo
-2024-12-15 11:03:53,100 - INFO - Descompactando arquivo
-2024-12-15 11:03:54,561 - INFO - Descompactando arquivo
-2024-12-15 11:03:57,826 - INFO - Descompactando arquivo
-2024-12-15 11:03:59,469 - INFO - Descompactando arquivo
-2024-12-15 11:04:01,612 - INFO - Descompactando arquivo
-2024-12-15 11:04:04,186 - INFO - Descompactando arquivo
-2024-12-15 11:04:07,259 - INFO - Descompactando arquivo
-2024-12-15 11:04:10,547 - INFO - LER E INSERIR DADOS
-2024-12-15 11:04:10,547 - INFO - Separar arquivos
-2024-12-15 11:17:50,334 - INFO - Acesso Banco de dados
-2024-12-15 11:20:36,874 - INFO - Iniciando o processo de carga
-2024-12-15 11:20:36,877 - INFO - Acesso ao site
-2024-12-15 11:20:38,992 - INFO - Download arquivos
-2024-12-15 11:21:54,925 - INFO - Descompactando arquivo
-2024-12-15 11:21:54,939 - INFO - Descompactando arquivo
-2024-12-15 11:22:01,798 - INFO - Descompactando arquivo
-2024-12-15 11:22:03,711 - INFO - Descompactando arquivo
-2024-12-15 11:22:05,404 - INFO - Descompactando arquivo
-2024-12-15 11:22:07,862 - INFO - Descompactando arquivo
-2024-12-15 11:22:09,398 - INFO - Descompactando arquivo
-2024-12-15 11:22:11,146 - INFO - Descompactando arquivo
-2024-12-15 11:22:12,712 - INFO - Descompactando arquivo
-2024-12-15 11:22:14,750 - INFO - Descompactando arquivo
-2024-12-15 11:22:17,118 - INFO - Descompactando arquivo
-2024-12-15 11:22:18,683 - INFO - Descompactando arquivo
-2024-12-15 11:22:56,224 - INFO - Descompactando arquivo
-2024-12-15 11:23:10,081 - INFO - Descompactando arquivo
-2024-12-15 11:23:24,892 - INFO - Descompactando arquivo
-2024-12-15 11:23:39,305 - INFO - Descompactando arquivo
-2024-12-15 11:23:54,686 - INFO - Descompactando arquivo
-2024-12-15 11:24:09,482 - INFO - Descompactando arquivo
-2024-12-15 11:24:23,143 - INFO - Descompactando arquivo
-2024-12-15 11:24:38,002 - INFO - Descompactando arquivo
-2024-12-15 11:24:53,055 - INFO - Descompactando arquivo
-2024-12-15 11:25:08,509 - INFO - Descompactando arquivo
-2024-12-15 11:25:08,511 - INFO - Descompactando arquivo
-2024-12-15 11:25:08,514 - INFO - Descompactando arquivo
-2024-12-15 11:25:08,516 - INFO - Descompactando arquivo
-2024-12-15 11:25:08,517 - INFO - Descompactando arquivo
-2024-12-15 11:25:08,519 - INFO - Descompactando arquivo
-2024-12-15 11:25:29,525 - INFO - Descompactando arquivo
-2024-12-15 11:25:37,080 - INFO - Descompactando arquivo
-2024-12-15 11:25:39,502 - INFO - Descompactando arquivo
-2024-12-15 11:25:43,720 - INFO - Descompactando arquivo
-2024-12-15 11:25:44,603 - INFO - Descompactando arquivo
-2024-12-15 11:25:47,628 - INFO - Descompactando arquivo
-2024-12-15 11:25:50,427 - INFO - Descompactando arquivo
-2024-12-15 11:25:54,031 - INFO - Descompactando arquivo
-2024-12-15 11:25:55,256 - INFO - Descompactando arquivo
-2024-12-15 11:25:56,830 - INFO - Descompactando arquivo
-2024-12-15 11:26:01,453 - INFO - LER E INSERIR DADOS
-2024-12-15 11:26:01,454 - INFO - Separar arquivos
-2024-12-15 12:24:37,944 - INFO - Acesso Banco de dados
-2024-12-15 12:29:10,092 - INFO - Iniciando o processo de carga
-2024-12-15 12:29:10,095 - INFO - Acesso ao site
-2024-12-15 12:29:12,203 - INFO - Download arquivos
-2024-12-15 12:30:28,102 - INFO - Descompactando arquivo
-2024-12-15 12:30:28,120 - INFO - Descompactando arquivo
-2024-12-15 12:30:34,801 - INFO - Descompactando arquivo
+2024-12-15 15:46:15,598 - INFO - Iniciando o processo de carga
+2024-12-15 15:46:15,602 - INFO - Acesso ao site
+2024-12-15 15:46:17,711 - INFO - Download arquivos
+2024-12-15 15:47:33,558 - INFO - Descompactando arquivo
+2024-12-15 15:47:33,585 - INFO - Descompactando arquivo
+2024-12-15 15:47:40,304 - INFO - Descompactando arquivo
+2024-12-15 15:47:42,803 - INFO - Descompactando arquivo
+2024-12-15 15:47:44,239 - INFO - Descompactando arquivo
+2024-12-15 15:47:46,047 - INFO - Descompactando arquivo
+2024-12-15 15:47:47,874 - INFO - Descompactando arquivo
+2024-12-15 15:47:49,697 - INFO - Descompactando arquivo
+2024-12-15 15:47:51,924 - INFO - Descompactando arquivo
+2024-12-15 15:47:53,513 - INFO - Descompactando arquivo
+2024-12-15 15:47:55,958 - INFO - Descompactando arquivo
+2024-12-15 15:47:57,545 - INFO - Descompactando arquivo
+2024-12-15 15:48:36,006 - INFO - Descompactando arquivo
+2024-12-15 15:48:50,554 - INFO - Descompactando arquivo
+2024-12-15 15:49:05,361 - INFO - Descompactando arquivo
+2024-12-15 15:49:19,672 - INFO - Descompactando arquivo
+2024-12-15 15:49:34,873 - INFO - Descompactando arquivo
+2024-12-15 15:49:49,464 - INFO - Descompactando arquivo
+2024-12-15 15:50:04,280 - INFO - Descompactando arquivo
+2024-12-15 15:50:19,215 - INFO - Descompactando arquivo
+2024-12-15 15:50:34,262 - INFO - Descompactando arquivo
+2024-12-15 15:50:49,210 - INFO - Descompactando arquivo
+2024-12-15 15:50:49,212 - INFO - Descompactando arquivo
+2024-12-15 15:50:49,215 - INFO - Descompactando arquivo
+2024-12-15 15:50:49,217 - INFO - Descompactando arquivo
+2024-12-15 15:50:49,219 - INFO - Descompactando arquivo
+2024-12-15 15:50:49,220 - INFO - Descompactando arquivo
+2024-12-15 15:51:09,927 - INFO - Descompactando arquivo
+2024-12-15 15:51:18,150 - INFO - Descompactando arquivo
+2024-12-15 15:51:21,366 - INFO - Descompactando arquivo
+2024-12-15 15:51:22,883 - INFO - Descompactando arquivo
+2024-12-15 15:51:27,112 - INFO - Descompactando arquivo
+2024-12-15 15:51:28,411 - INFO - Descompactando arquivo
+2024-12-15 15:51:31,367 - INFO - Descompactando arquivo
+2024-12-15 15:51:33,410 - INFO - Descompactando arquivo
+2024-12-15 15:51:36,573 - INFO - Descompactando arquivo
+2024-12-15 15:51:38,130 - INFO - Descompactando arquivo
+2024-12-15 15:51:40,222 - INFO - LER E INSERIR DADOS
+2024-12-15 15:51:40,223 - INFO - Separar arquivos
+2024-12-15 15:51:43,291 - INFO - Acesso Banco de dados
