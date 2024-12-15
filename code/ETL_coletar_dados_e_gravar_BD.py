@@ -19,16 +19,25 @@ import sql
 import sqlalchemy
 import sys
 import time
+import threading
 import urllib.parse
 import urllib.request
 import wget
 import zipfile
 
 cnpj_basico=''
+current = 1
 i=0
 # Gerar Log
-logging.basicConfig(filename='DADOS_RFB.log', level=logging.INFO)
-logging.info('Iniciando o processo de carga')
+logging.basicConfig(filename='DADOS_RFB.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.info(f"Iniciando o processo de carga")
+shutdown_event = threading.Event()  # Flag to signal shutdown
+
+def my_thread_function():
+    while not shutdown_event.is_set():
+        # Perform thread tasks here
+        time.sleep(1)  # Simulate thread work
+        logging.info("Thread Ativo")
 
 def check_diff(url, file_name):
     '''
@@ -44,8 +53,8 @@ def check_diff(url, file_name):
     if new_size != old_size:
         os.remove(file_name)
         return True  # tamanho diferentes
-
-    return False  # arquivos sao iguais
+    else:
+        return False  # arquivos sao iguais
 
 
 # %%
@@ -68,20 +77,35 @@ def to_sql(dataframe, **kwargs):
     name = kwargs.get('name')
 
 def chunker(df):
-    return (df[i:i + size] for i in range(0, len(df), size))
-    print(chunker)
+    try:
+        return (df[i:i + size] for i in range(0, len(df), size))
+        print(chunker)
     
-    for df_chunk in (dataframe[i:i + size] for i in range(0, len(dataframe),size)):
-        df_chunk.to_sql(**kwargs)
+        for df_chunk in (dataframe[i:i + size] for i in range(0, len(dataframe),size)):
+            df_chunk.to_sql(**kwargs)
+    except Exception as e:
+        logging.error(f"Erro na thread: {e}")
+    finally:
+        # Limpar recursos
+        logging.info(f"Thread")        
 
     # Gravar dados no banco:
     # Empresa
+    
 def process_and_insert_chunk(df_chunk, conexao, table_name):
     # Conexao (URI)
-    uri = f"mysql+mysqlconnector://{os.getenv('db_user')}:{os.getenv('db_password')}@{os.getenv('db_host')}:{os.getenv('DB_PORT')}/{os.getenv('db_name')}"
-    # Processo para inserir no banco de dados
-    df_chunk.to_sql(table_name, uri, if_exists='append', index=False)
-    print('Tabela : ' + table_name + ' inserido com sucesso no banco de dados!')
+    try:
+        uri = f"mysql+mysqlconnector://{os.getenv('db_user')}:{os.getenv('db_password')}@{os.getenv('db_host')}:{os.getenv('DB_PORT')}/{os.getenv('db_name')}"
+        # Processo para inserir no banco de dados
+        df_chunk.to_sql(table_name, uri, if_exists='append', index=False)
+        logging.info(f"Tabela: {table_name} inserido com sucesso no banco de dados!")
+        bar_progress(current, 37)
+        current=+1
+        pass
+    except Exception as e:
+        logging.error(f"Erro na thread: {e}")
+    finally:
+        logging.info(f"Thread")    
 
 # %%
 # Ler arquivo de configuração de ambiente # https://dev.to/jakewitcher/using-env-files-for-environment-variables-in-python-applications-55a1
@@ -97,7 +121,7 @@ load_dotenv(dotenv_path=dotenv_path)
 
 dados_rf = 'http://localhost:8000'
 
-logging.info('Acesso ao site')
+logging.info(f"Acesso ao site")
 # %%
 # Read details from ".env" file:
 output_files = None
@@ -159,14 +183,14 @@ for f in Files:
 # Create this bar_progress method which is invoked automatically from wget:
 
 def bar_progress(current, total, width=80):
-    progress_message = "Downloading: %d%% [%d / %d] bytes - " % (current / total * 100, current, total)
+    messagem = "Executando: %d%% [%d / %d] bytes - " % (current / total * 100, current, total)
     # Don't use print() as it will print in new line every time.
-    sys.stdout.write("\r" + progress_message)
+    sys.stdout.write("\r" + messagem)
     sys.stdout.flush()
 
 # %%
 # Download arquivos ################################################################################################################################
-logging.info('Download arquivos')
+logging.info(f"Download arquivos")
 print('Baixando arquivo:')
 i_l = 0
 for l in Files:
@@ -186,7 +210,7 @@ print('Descompactando arquivo:')
 i_l = 0
 for l in Files:
     try:
-        logging.info('Descompactando arquivo')
+        logging.info(f"Descompactando arquivo")
         i_l += 1
         print(str(i_l) + ' - ' + l)
         full_path = os.path.join(output_files, l)
@@ -200,7 +224,7 @@ for l in Files:
 ## LER E INSERIR DADOS #################################################################################################
 ########################################################################################################################
 insert_start = time.time()
-logging.info('LER E INSERIR DADOS')
+logging.info(f"LER E INSERIR DADOS")
 # Files:
 Items = [name for name in os.listdir(extracted_files) if name.endswith('')]
 
@@ -243,7 +267,7 @@ for i in range(len(Items)):
 # %%
 # Conectar no banco de dados:
 # Dados da conexão com o BD
-logging.info(' Acesso Banco de dados')
+logging.info(f"Acesso Banco de dados")
 
 conexao = mysql.connector.connect(
     host=os.getenv('db_host'),
@@ -251,14 +275,17 @@ conexao = mysql.connector.connect(
     password=os.getenv('db_password'),
     database=os.getenv('db_name')   
 )
-cur = conexao.cursor()
+try:
+    cur = conexao.cursor()
 
-if conexao.is_connected():
-    logging.info('Conexao Executada')
-else:
+    if conexao.is_connected():
+        logging.info(f"Conexao Executada")
+    else:
+        conexao.close()
+        logging.info(f"Conexao falhou") 
+except:
+    logging.info(f"Conexao falhou")
     conexao.close()
-    logging.info('Conexao falhou') 
-
 # %%
 # Arquivos de empresa:
 empresa_insert_start = time.time()
@@ -268,7 +295,7 @@ print("""
 #########################
 """)
 i=0
-logging.info('Ler arquivos de Empresa')
+logging.info(f"Ler arquivos de Empresa")
 # Drop table antes do insert
 cur.execute('DROP TABLE IF EXISTS empresa;')
 conexao.commit()
@@ -325,7 +352,7 @@ print("""
 ####################################
 """)
 i=0
-logging.info('Ler arquivos de Estabelecimento')
+logging.info(f"Ler arquivos de Estabelecimento")
 # Drop table antes do insert
 cur.execute('DROP TABLE IF EXISTS estabelecimento;')
 conexao.commit()
@@ -443,7 +470,7 @@ print("""
 #########################
 """)
 i=0
-logging.info('Ler arquivos de Socios')
+logging.info(f"Ler arquivos de Socios")
 # Drop table antes do insert
 cur.execute('DROP TABLE IF EXISTS socios;')
 conexao.commit()
@@ -521,7 +548,7 @@ print("""
 ###################################
 """)
 i=0
-logging.info('Ler arquivos de Simples Nacional')
+logging.info(f"Ler arquivos de Simples Nacional")
 # Drop table antes do insert
 cur.execute('DROP TABLE IF EXISTS simples;')
 conexao.commit()
@@ -592,7 +619,7 @@ print("""
 #######################
 """)
 i=0
-logging.info('Ler arquivos de CNAE')
+logging.info(f"Ler arquivos de CNAE")
 # Drop table antes do insert
 cur.execute('DROP TABLE IF EXISTS cnae;')
 conexao.commit()
@@ -645,7 +672,7 @@ print("""
 ############################################
 """)
 i=0
-logging.info('Ler arquivos de Situacao Atual')
+logging.info(f"Ler arquivos de Situacao Atual")
 # Drop table antes do insert
 cur.execute('DROP TABLE IF EXISTS moti;')
 conexao.commit()
@@ -701,7 +728,7 @@ print("""
 ##########################
 """)
 i=0
-logging.info('Ler arquivos de Municipios')
+logging.info(f"Ler arquivos de Municipios")
 # Drop table antes do insert
 cur.execute('DROP TABLE IF EXISTS munic;')
 conexao.commit()
@@ -756,7 +783,7 @@ print("""
 ## Arquivos de natureza jurídica: ##
 ####################################
 """)
-logging.info('Ler arquivos de Natureza Juridica')
+logging.info(f"Ler arquivos de Natureza Juridica")
 # Drop table antes do insert
 cur.execute('DROP TABLE IF EXISTS natju;')
 conexao.commit()
@@ -809,7 +836,7 @@ print("""
 #######################
 """)
 i=0
-logging.info('Ler arquivos de PAIS')
+logging.info(f"Ler arquivos de PAIS")
 # Drop table antes do insert
 cur.execute('DROP TABLE IF EXISTS pais;')
 conexao.commit()
@@ -863,7 +890,7 @@ print("""
 #########################################
 """)
 i=0
-logging.info('Ler arquivos de Qualificacao de Socios')
+logging.info(f"Ler arquivos de Qualificacao de Socios")
 # Drop table antes do insert
 cur.execute('DROP TABLE IF EXISTS quals;')
 conexao.commit()
@@ -919,7 +946,7 @@ print("""
 ## Processo de carga dos arquivos finalizado!
 #############################################
 """)
-logging.info('Processo de carga dos arquivos finalizado')
+logging.info(f"Processo de carga dos arquivos finalizado")
 # Tempo de execução do processo (em segundos): 17.770 (4hrs e 57 min)
 print('Tempo total de execução do processo de carga (em segundos): ' + str(Tempo_insert))
 
@@ -954,7 +981,7 @@ if cnpj_basico!="":
     index_end = time.time()
     index_time = round(index_end - index_start)
     print('Tempo para criar os índices (em segundos): ' + str(index_time))
-
+    conexao.close()
     # %%
     print("""Processo 100% finalizado! Você já pode usar seus dados no BD!
      - Desenvolvido por: Aphonso Henrique do Amaral Rafael
