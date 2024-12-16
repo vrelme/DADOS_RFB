@@ -325,8 +325,8 @@ try:
                 host=os.getenv('db_host'),
                 user=os.getenv('db_user'),
                 password=os.getenv('db_password'),
-                database=os.getenv('db_name'),
-                auth_plugin='caching_sha2_password' 
+                database=os.getenv('db_name')
+                #auth_plugin='caching_sha2_password' 
                 )
 
     cur = conexao.cursor()
