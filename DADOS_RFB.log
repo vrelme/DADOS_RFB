@@ -1,4 +1,27 @@
-
-2024-12-15 23:35:15,505 - INFO - Iniciando o processo de carga
-2024-12-15 23:35:47,437 - INFO - Acesso ao site
-2024-12-15 23:36:05,267 - ERROR - Erro na definição dos diretórios, verifique o arquivo '.env' ou o local informado do seu arquivo de configuração. D:\Repositorio\00_Programação\06 - DADOS_RFB\DADOS_RFB\code\.env: module 'os' has no attribute 'makedirs_custom'
+2024-12-16 16:12:45,914 - INFO - Iniciando o processo de carga
+2024-12-16 16:12:45,918 - INFO - Acesso ao site
+2024-12-16 16:12:48,058 - INFO - Download arquivos
+2024-12-16 16:17:03,316 - INFO - Fim do Download doa arquivos
+2024-12-16 16:17:03,317 - INFO - Descompactando arquivo
+2024-12-16 16:21:09,472 - INFO - Fim descompactando arquivo
+2024-12-16 16:21:09,472 - INFO - LER E INSERIR DADOS
+2024-12-16 16:21:09,472 - INFO - Separar arquivos
+2024-12-16 16:21:09,477 - INFO - Acesso Banco de dados
+2024-12-16 16:57:48,846 - INFO - Iniciando o processo de carga
+2024-12-16 16:57:48,849 - INFO - Acesso ao site
+2024-12-16 16:57:51,021 - INFO - Download arquivos
+2024-12-16 17:02:07,139 - INFO - Fim do Download doa arquivos
+2024-12-16 17:02:07,140 - INFO - Descompactando arquivo
+2024-12-16 17:06:17,387 - INFO - Fim descompactando arquivo
+2024-12-16 17:06:17,387 - INFO - LER E INSERIR DADOS
+2024-12-16 17:06:17,388 - INFO - Separar arquivos
+2024-12-16 17:06:17,393 - INFO - Acesso Banco de dados
+2024-12-16 17:23:53,365 - INFO - Iniciando o processo de carga
+2024-12-16 17:23:53,369 - INFO - Acesso ao site
+2024-12-16 17:23:55,490 - INFO - Download arquivos
+2024-12-16 17:28:12,514 - INFO - Fim do Download doa arquivos
+2024-12-16 17:28:12,515 - INFO - Descompactando arquivo
+2024-12-16 17:32:21,249 - INFO - Fim descompactando arquivo
+2024-12-16 17:32:21,250 - INFO - LER E INSERIR DADOS
+2024-12-16 17:32:21,250 - INFO - Separar arquivos
+2024-12-16 17:32:21,256 - INFO - Acesso Banco de dados

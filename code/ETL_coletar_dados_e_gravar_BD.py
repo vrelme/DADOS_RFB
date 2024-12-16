@@ -1,14 +1,11 @@
-#from datetime import date
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
-#from sqlalchemy.ext.declarative import declarative_base
 import bs4 as bs
 import dask.dataframe as dd
-#import ftplib
 import getenv
 import hashlib
 import logging
-#import lxml
+import lxml
 import mysql.connector
 import numpy as np
 import os
@@ -19,7 +16,6 @@ import sql
 import sqlalchemy
 import sys
 import time
-#import threading
 import urllib.parse
 import urllib.request
 import wget
@@ -66,8 +62,24 @@ def check_diff(url, file_name):
         print(f"Erro ao acessar o arquivo local: {e}")
         logging.info(f"Erro ao acessar o arquivo local")
         return True
+    finally:
+        response.close
 
 # %%
+def create_dataframe(data, columns):
+    """Cria um DataFrame a partir dos dados e colunas fornecidos.
+
+    Args:
+    data: Uma lista de listas ou um dicionário contendo os dados.
+    colmns: Uma lista com os nomes das colunas.
+
+    Returns:
+    Um DataFrame pandas.
+    """
+
+    df = pd.DataFrame(data, columns=columns)
+    return df
+
 def makedirs_custom(path, exist_ok=True, mode=0o755):
     """Cria diretórios recursivamente com controle de existência e permissões.
 
@@ -80,12 +92,11 @@ def makedirs_custom(path, exist_ok=True, mode=0o755):
         bool: True se o diretório foi criado com sucesso, False caso contrário.
     """
     try:
-        os.makedirs_custom(path, exist_ok=exist_ok, mode=mode)
+        os.makedirs(path, exist_ok=exist_ok, mode=mode)
         return True
     except OSError as e:
         logging.error(f"Erro ao criar diretório {path}: {e}")
-        return False
-
+    
 
 # %%
 
@@ -120,21 +131,13 @@ def chunker(df, chunksize=10000):
         pd.DataFrame: Próximo chunk do DataFrame.
     """
     try:
-        return (df[i:i + size] for i in range(0, len(df), size))
-        print(chunker)
-    
-        for df_chunk in (dataframe[i:i + size] for i in range(0, len(dataframe),size)):
-            df_chunk.to_sql(**kwargs)
+        for df_chunk in (pd.dataframe[i:i + chunksize] for i in range(0, len(pd.dataframe),chunksize)):
+            df_chunk.to_sql()
     except Exception as e:
         logging.error(f"Erro na thread: {e}")
     finally:
         # Limpar recursos
-        logging.info(f"Thread")        
-
-    # Dividir o DataFrame em chunks de 10.000 linhas
-    for chunk in chunker(dataframe, chunksize=10000):
-        # Processar cada chunk (por exemplo, inserir em um banco de dados)
-        print(chunk.head())
+        logging.info(f"Thread")  
 
 # Gravar dados no banco:
 # Empresa
@@ -144,7 +147,7 @@ def process_and_insert_chunk(df_chunk, conexao, table_name):
     try:
         connection_uri = f"mysql+mysqlconnector://{os.getenv('db_user')}:{os.getenv('db_password')}@{os.getenv('db_host')}:{os.getenv('DB_PORT')}/{os.getenv('db_name')}"
         # Processo para inserir no banco de dados
-        df_chunk.to_sql(table_name, uri, if_exists='append', index=False)
+        df_chunk.to_sql(table_name, connection_uri, if_exists='append', index=False)
         logging.info(f"Tabela: {table_name} inserido com sucesso no banco de dados!")
         bar_progress(current, 37)
         current=+1
@@ -152,7 +155,7 @@ def process_and_insert_chunk(df_chunk, conexao, table_name):
     except Exception as e:
         logging.error(f"Erro na thread: {e}")
     finally:
-        logging.info(f"Thread")    
+        logging.info(f"Thread")   
 
 # %%
 # Ler arquivo de configuração de ambiente # https://dev.to/jakewitcher/using-env-files-for-environment-variables-in-python-applications-55a1
@@ -162,7 +165,7 @@ def getEnv(env):
 
 # print('Especifique o local do seu arquivo de configuração ".env". Por exemplo: C:\...\Receita_Federal_do_Brasil_-_Dados_Publicos_CNPJ\code')
 # C:\Aphonso_C\Git\Receita_Federal_do_Brasil_-_Dados_Publicos_CNPJ\code
-local_env = 'D:\\Repositorio\\00_Programação\\06 - DADOS_RFB\\DADOS_RFB\\code'
+local_env = 'D:\\Repositorio\\00-Programacao\\06-DADOS_RFB\\DADOS_RFB\\code'
 dotenv_path = os.path.join(local_env, '.env')
 load_dotenv(dotenv_path=dotenv_path)
 
@@ -174,11 +177,11 @@ logging.info(f"Acesso ao site")
 output_files = None
 extracted_files = None
 try:
-    output_files = getEnv('OUTPUT_FILES_PATH')
-    makedirs_custom(output_files, mode=0o755)
+    output_files = os.getenv('OUTPUT_FILES_PATH')
+    makedirs_custom(output_files, True, 0o755)
 
-    extracted_files = getEnv('EXTRACTED_FILES_PATH')
-    makedirs_custom(extracted_files, mode=0o755)
+    extracted_files = os.getenv('EXTRACTED_FILES_PATH')
+    makedirs_custom(extracted_files)
 
     print('Diretórios definidos: \n' +
           'output_files: ' + str(output_files) + '\n' +
@@ -316,23 +319,24 @@ for i in range(len(Items)):
 # Conectar no banco de dados:
 # Dados da conexão com o BD
 logging.info(f"Acesso Banco de dados")
+
 try:
     conexao = mysql.connector.connect(
                 host=os.getenv('db_host'),
                 user=os.getenv('db_user'),
                 password=os.getenv('db_password'),
-                database=os.getenv('db_name')   
+                database=os.getenv('db_name'),
+                auth_plugin='caching_sha2_password' 
                 )
 
     cur = conexao.cursor()
 
-except mysql.connector.Error as err:
+except mysql.connector.Error as e:
+    logging.error(f"Erro na thread {e}")
     print(f"Erro na thread: {e}")
     logging.info(f"Conexao falhou")
 
-# Criação e inicialização da thread
-thread = threading.Thread(target=my_thread_function)
-thread.start()
+
 
 # %%
 # Arquivos de empresa:
@@ -632,8 +636,8 @@ for e in range(0, len(arquivos_simples)):
     extracted_file_path = os.path.join(extracted_files, arquivos_simples[e])
     simples = dd.read_csv(extracted_file_path,
                         sep=';',
-                        nrows=nrows,
-                        skiprows=skiprows,
+                        #nrows=nrows,
+                        skiprows=0,
                         header=None,
                         dtype='object',
                         encoding='latin1')
@@ -1030,7 +1034,7 @@ if cnpj_basico!="":
     index_time = round(index_end - index_start)
     print('Tempo para criar os índices (em segundos): ' + str(index_time))
     # Encerramento da thread (exemplo simplificado)
-    thread.join()
+
     # %%
     print("""Processo 100% finalizado! Você já pode usar seus dados no BD!
      - Desenvolvido por: Aphonso Henrique do Amaral Rafael
