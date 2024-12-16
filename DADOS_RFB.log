@@ -1,43 +1,4 @@
-2024-12-15 15:46:15,598 - INFO - Iniciando o processo de carga
-2024-12-15 15:46:15,602 - INFO - Acesso ao site
-2024-12-15 15:46:17,711 - INFO - Download arquivos
-2024-12-15 15:47:33,558 - INFO - Descompactando arquivo
-2024-12-15 15:47:33,585 - INFO - Descompactando arquivo
-2024-12-15 15:47:40,304 - INFO - Descompactando arquivo
-2024-12-15 15:47:42,803 - INFO - Descompactando arquivo
-2024-12-15 15:47:44,239 - INFO - Descompactando arquivo
-2024-12-15 15:47:46,047 - INFO - Descompactando arquivo
-2024-12-15 15:47:47,874 - INFO - Descompactando arquivo
-2024-12-15 15:47:49,697 - INFO - Descompactando arquivo
-2024-12-15 15:47:51,924 - INFO - Descompactando arquivo
-2024-12-15 15:47:53,513 - INFO - Descompactando arquivo
-2024-12-15 15:47:55,958 - INFO - Descompactando arquivo
-2024-12-15 15:47:57,545 - INFO - Descompactando arquivo
-2024-12-15 15:48:36,006 - INFO - Descompactando arquivo
-2024-12-15 15:48:50,554 - INFO - Descompactando arquivo
-2024-12-15 15:49:05,361 - INFO - Descompactando arquivo
-2024-12-15 15:49:19,672 - INFO - Descompactando arquivo
-2024-12-15 15:49:34,873 - INFO - Descompactando arquivo
-2024-12-15 15:49:49,464 - INFO - Descompactando arquivo
-2024-12-15 15:50:04,280 - INFO - Descompactando arquivo
-2024-12-15 15:50:19,215 - INFO - Descompactando arquivo
-2024-12-15 15:50:34,262 - INFO - Descompactando arquivo
-2024-12-15 15:50:49,210 - INFO - Descompactando arquivo
-2024-12-15 15:50:49,212 - INFO - Descompactando arquivo
-2024-12-15 15:50:49,215 - INFO - Descompactando arquivo
-2024-12-15 15:50:49,217 - INFO - Descompactando arquivo
-2024-12-15 15:50:49,219 - INFO - Descompactando arquivo
-2024-12-15 15:50:49,220 - INFO - Descompactando arquivo
-2024-12-15 15:51:09,927 - INFO - Descompactando arquivo
-2024-12-15 15:51:18,150 - INFO - Descompactando arquivo
-2024-12-15 15:51:21,366 - INFO - Descompactando arquivo
-2024-12-15 15:51:22,883 - INFO - Descompactando arquivo
-2024-12-15 15:51:27,112 - INFO - Descompactando arquivo
-2024-12-15 15:51:28,411 - INFO - Descompactando arquivo
-2024-12-15 15:51:31,367 - INFO - Descompactando arquivo
-2024-12-15 15:51:33,410 - INFO - Descompactando arquivo
-2024-12-15 15:51:36,573 - INFO - Descompactando arquivo
-2024-12-15 15:51:38,130 - INFO - Descompactando arquivo
-2024-12-15 15:51:40,222 - INFO - LER E INSERIR DADOS
-2024-12-15 15:51:40,223 - INFO - Separar arquivos
-2024-12-15 15:51:43,291 - INFO - Acesso Banco de dados
+
+2024-12-15 23:35:15,505 - INFO - Iniciando o processo de carga
+2024-12-15 23:35:47,437 - INFO - Acesso ao site
+2024-12-15 23:36:05,267 - ERROR - Erro na definição dos diretórios, verifique o arquivo '.env' ou o local informado do seu arquivo de configuração. D:\Repositorio\00_Programação\06 - DADOS_RFB\DADOS_RFB\code\.env: module 'os' has no attribute 'makedirs_custom'

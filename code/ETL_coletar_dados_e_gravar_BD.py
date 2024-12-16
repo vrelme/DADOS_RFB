@@ -1,14 +1,14 @@
-from datetime import date
+#from datetime import date
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
+#from sqlalchemy.ext.declarative import declarative_base
 import bs4 as bs
 import dask.dataframe as dd
-import ftplib
+#import ftplib
 import getenv
-import gzip
+import hashlib
 import logging
-import lxml
+#import lxml
 import mysql.connector
 import numpy as np
 import os
@@ -19,7 +19,7 @@ import sql
 import sqlalchemy
 import sys
 import time
-import threading
+#import threading
 import urllib.parse
 import urllib.request
 import wget
@@ -33,43 +33,92 @@ logging.basicConfig(filename='DADOS_RFB.log', level=logging.INFO, format='%(asct
 logging.info(f"Iniciando o processo de carga")
 
 def check_diff(url, file_name):
-    '''
-    Verifica se o arquivo no servidor existe no disco e se ele tem o mesmo
-    tamanho no servidor.
-    '''
-    if not os.path.isfile(file_name):
-        return True  # ainda nao foi baixado
+    # Verifica se o arquivo local é idêntico ao arquivo remoto.
+    #
+    # Args:
+    #    url (str): URL do arquivo remoto.
+    #   file_name (str): Nome do arquivo local.
+    #
+    # Returns:
+    #    bool: True se o arquivo precisa ser baixado, False caso contrário.
+    #
+    try:
+        response = requests.head(url)
+        response.raise_for_status()
+    
+        remote_size = int(response.headers.get('content-length', 0))
+        if os.path.exists(file_name):
+            with open(file_name, 'rb') as f:
+                local_hash = hashlib.sha256(f.read()).hexdigest()
+            response = requests.get(url, stream=True)
+            hasher = hashlib.sha256()
+            for chunk in response.iter_content(chunk_size=8192):  
+                hasher.update(chunk)
+            remote_hash = hasher.hexdigest()
+            return local_hash != remote_hash
+        else:
+            return True
+    except requests.exceptions.RequestException as e:
+        print(f"Erro ao verificar o arquivo remoto: {e}")
+        logging.info(f"Erro ao verificar o arquivo remoto")
+        return True
+    except OSError as e:
+        print(f"Erro ao acessar o arquivo local: {e}")
+        logging.info(f"Erro ao acessar o arquivo local")
+        return True
 
-    response = requests.head(url)
-    new_size = int(response.headers.get('content-length', 0))
-    old_size = os.path.getsize(file_name)
-    if new_size != old_size:
-        os.remove(file_name)
-        return True  # tamanho diferentes
-    else:
-        return False  # arquivos sao iguais
+# %%
+def makedirs_custom(path, exist_ok=True, mode=0o755):
+    """Cria diretórios recursivamente com controle de existência e permissões.
+
+    Args:
+        path (str): Caminho completo do diretório a ser criado.
+        exist_ok (bool, opcional): Se True, não gera erro se o diretório já existe.
+        mode (int, opcional): Permissões do diretório.
+
+    Returns:
+        bool: True se o diretório foi criado com sucesso, False caso contrário.
+    """
+    try:
+        os.makedirs_custom(path, exist_ok=exist_ok, mode=mode)
+        return True
+    except OSError as e:
+        logging.error(f"Erro ao criar diretório {path}: {e}")
+        return False
 
 
 # %%
-def makedirs(path):
-    '''
-    cria path caso seja necessario
-    '''
-    if not os.path.exists(path):
-        os.makedirs(path)
 
-# %%
+def to_sql(dataframe, table_name, connection_uri, if_exists='append', index=False, chunksize=10000):
+    """Insere um DataFrame em uma tabela de banco de dados.
 
-def to_sql(dataframe, **kwargs):
-    '''
-    Quebra em pedacos a tarefa de inserir registros no banco
-    '''
-    print(dataframe)
-    size = 4096
-    total = len(dataframe)
-    name = kwargs.get('name')
+    Args:
+        dataframe (pd.DataFrame): DataFrame a ser inserido.
+        table_name (str): Nome da tabela no banco de dados.
+        connection_uri (str): URI de conexão com o banco de dados.
+        if_exists (str, optional): Ação a ser tomada se a tabela já existir. Defaults to 'append'.
+        index (bool, optional): Se True, inclui o índice do DataFrame na tabela. Defaults to False.
+        chunksize (int, optional): Tamanho dos chunks para inserção. Defaults to 10000.
+    """
 
-def chunker(df):
+    try:
+        for chunk in chunker(dataframe, chunksize):
+            chunk.to_sql(table_name, connection_uri, if_exists='append', index=index, chunksize=10000)
+    except Exception as e:
+        logging.error(f"Erro ao inserir dados: {e}")
+        print(f"Erro ao inserir dados: {e}")
+    
+
+def chunker(df, chunksize=10000):
+    """Divide um DataFrame em chunks de tamanho especificado.
+
+    Args:
+        df (pd.DataFrame): DataFrame a ser dividido em chunks.
+        chunksize (int, optional): Tamanho de cada chunk. Defaults to 10000.
+
+    Yields:
+        pd.DataFrame: Próximo chunk do DataFrame.
+    """
     try:
         return (df[i:i + size] for i in range(0, len(df), size))
         print(chunker)
@@ -82,13 +131,18 @@ def chunker(df):
         # Limpar recursos
         logging.info(f"Thread")        
 
-    # Gravar dados no banco:
-    # Empresa
+    # Dividir o DataFrame em chunks de 10.000 linhas
+    for chunk in chunker(dataframe, chunksize=10000):
+        # Processar cada chunk (por exemplo, inserir em um banco de dados)
+        print(chunk.head())
+
+# Gravar dados no banco:
+# Empresa
     
 def process_and_insert_chunk(df_chunk, conexao, table_name):
     # Conexao (URI)
     try:
-        uri = f"mysql+mysqlconnector://{os.getenv('db_user')}:{os.getenv('db_password')}@{os.getenv('db_host')}:{os.getenv('DB_PORT')}/{os.getenv('db_name')}"
+        connection_uri = f"mysql+mysqlconnector://{os.getenv('db_user')}:{os.getenv('db_password')}@{os.getenv('db_host')}:{os.getenv('DB_PORT')}/{os.getenv('db_name')}"
         # Processo para inserir no banco de dados
         df_chunk.to_sql(table_name, uri, if_exists='append', index=False)
         logging.info(f"Tabela: {table_name} inserido com sucesso no banco de dados!")
@@ -121,18 +175,18 @@ output_files = None
 extracted_files = None
 try:
     output_files = getEnv('OUTPUT_FILES_PATH')
-    makedirs(output_files)
+    makedirs_custom(output_files, mode=0o755)
 
     extracted_files = getEnv('EXTRACTED_FILES_PATH')
-    makedirs(extracted_files)
+    makedirs_custom(extracted_files, mode=0o755)
 
     print('Diretórios definidos: \n' +
           'output_files: ' + str(output_files) + '\n' +
           'extracted_files: ' + str(extracted_files))
-except:
+except Exception as e:
+    logging.error(f"Erro na definição dos diretórios, verifique o arquivo '.env' ou o local informado do seu arquivo de configuração. {dotenv_path}: {e}")
     pass
-    print('Erro na definição dos diretórios, verifique o arquivo ".env" ou o local informado do seu arquivo de configuração.')
-
+    
 # %%
 raw_html = urllib.request.urlopen(dados_rf)
 raw_html = raw_html.read()
@@ -182,7 +236,7 @@ def bar_progress(current, total, width=80):
     sys.stdout.flush()
 
 # %%
-# Download arquivos ################################################################################################################################
+# Inicio Download dos arquivos ################################################################
 logging.info(f"Download arquivos")
 print('Baixando arquivo:')
 i_l = 0
@@ -194,16 +248,15 @@ for l in Files:
     file_name = os.path.join(output_files, l)
     if check_diff(url, file_name):
         wget.download(url, out=output_files, bar=bar_progress)
-
+logging.info(f"Fim do Download doa arquivos")
+# Fim do Download doa arquivos ######################################################
 # %%
-####################################################################################################################################################
-# %%
-# Extracting files:
+# Descompactando arquivo ####################################################################################################################################################
 print('Descompactando arquivo:')
 i_l = 0
+logging.info(f"Descompactando arquivo")
 for l in Files:
     try:
-        logging.info(f"Descompactando arquivo")
         i_l += 1
         print(str(i_l) + ' - ' + l)
         full_path = os.path.join(output_files, l)
@@ -211,7 +264,9 @@ for l in Files:
             zip_ref.extractall(extracted_files)
     except:
         pass
-
+logging.info(f"Fim descompactando arquivo")
+# Descompactando arquivo ####################################################################################################################################################
+ 
 # %%
 ########################################################################################################################
 ## LER E INSERIR DADOS #################################################################################################
@@ -322,7 +377,7 @@ for e in range(0, len(arquivos_empresa)):
     empresa = empresa.reset_index()
     del empresa['index']
 
-    for i in range(empresa.npartitions):
+    for i in chunker(empresa.npartitions):
         df_chunk = empresa.get_partition(i)
         process_and_insert_chunk(df_chunk, conexao,'empresa')
 
