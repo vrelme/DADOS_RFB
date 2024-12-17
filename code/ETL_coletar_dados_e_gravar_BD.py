@@ -96,24 +96,32 @@ def makedirs_custom(path, exist_ok=True, mode=0o755):
         return True
     except OSError as e:
         logging.error(f"Erro ao criar diretório {path}: {e}")
-    
-
-    
+     
     
 def process_and_insert_chunk(df_chunk, conexao, table_name):
     # Conexao (URI)
+       """Insere um chunk de DataFrame em uma tabela do banco de dados.
+
+    Args:
+        df_chunk (pd.DataFrame): Chunk de dados a ser inserido.
+        table_name (str): Nome da tabela no banco de dados.
+        connection_string (str): String de conexão com o banco de dados.
+    """
+
     try:
-        connection_uri = f"mysql+mysqlconnector://{os.getenv('db_user')}:{os.getenv('db_password')}@{os.getenv('db_host')}:{os.getenv('DB_PORT')}/{os.getenv('db_name')}"
-        # Processo para inserir no banco de dados
-        df_chunk.to_sql(table_name, connection_uri, if_exists='append', index=False)
-        logging.info(f"Tabela: {table_name} inserido com sucesso no banco de dados!")
-        bar_progress(current, 37)
-        current=+1
-        pass
+        # Cria a engine do SQLAlchemy com a string de conexão
+        engine = sqlalchemy.create_engine(connection_string)
+
+        # Insere o DataFrame no banco de dados
+        df_chunk.to_sql(table_name, con=engine, if_exists='append', index=False)
+
+        logging.info(f"Dados inseridos com sucesso na tabela {table_name}")
+    except sqlalchemy.exc.OperationalError as e:
+        logging.error(f"Erro de operação no banco de dados: {e}")
+    except sqlalchemy.exc.IntegrityError as e:
+        logging.error(f"Violação de integridade: {e}")
     except Exception as e:
-        logging.error(f"Erro na thread: {e}")
-    finally:
-        logging.info(f"Thread")   
+        logging.error(f"Erro inesperado: {e}")
 
 # %%
 # Ler arquivo de configuração de ambiente # https://dev.to/jakewitcher/using-env-files-for-environment-variables-in-python-applications-55a1
