@@ -110,7 +110,7 @@ def process_and_insert_chunk(df_chunk, conexao, table_name):
 
     try:
         # Cria a engine do SQLAlchemy com a string de conexão
-        engine = sqlalchemy.create_engine(connection_string)
+        engine = sqlalchemy.create_engine(conexao)
 
         # Insere o DataFrame no banco de dados
         df_chunk.to_sql(table_name, con=engine, if_exists='append', index=False)
@@ -375,9 +375,7 @@ logging.info(f"Ler arquivos de Estabelecimento")
 # Drop table antes do insert
 cur.execute('DROP TABLE IF EXISTS estabelecimento;')
 conexao.commit()
-for e in range(0, len(arquivos_estabelecimento)):
-    print('Trabalhando no arquivo: '+arquivos_estabelecimento[e]+' [...]')
-    column_names = ['cnpj_basico', 
+column_names = ['cnpj_basico', 
                     'cnpj_ordem', 
                     'cnpj_dv', 
                     'identificador_matriz_filial', 
@@ -407,46 +405,13 @@ for e in range(0, len(arquivos_estabelecimento)):
                     'correio_eletronico',
                     'situacao_especial',
                     'data_situacao_especial']
+for e in range(0, len(arquivos_estabelecimento)):
+    print('Trabalhando no arquivo: '+arquivos_estabelecimento[e]+' [...]')
+    logging.info(f"Trabalhando no arquivo: {arquivos_estabelecimento[e]} [...]")
     column_data = {name: [] for name in column_names}
     num_particoes = 10
     divisoes = np.linspace(0, 10000, num=num_particoes + 1).tolist()
-    estabelecimento = dd.DataFrame(column_data,  
-                                    meta={'cnpj_basico': 'object', 
-                                        'cnpj_ordem': 'object', 
-                                        'cnpj_dv': 'object', 
-                                        'identificador_matriz_filial': 'object', 
-                                        'nome_fantasia': 'object', 
-                                        'situacao_cadastral': 'object', 
-                                        'data_situacao_cadastral': 'object', 
-                                        'motivo_situacao_cadastral': 'object', 
-                                        'nome_cidade_exterior': 'object',
-                                        'pais': 'object',
-                                        'data_inicio_atividade': 'object',
-                                        'cnae_fiscal_principal': 'object',
-                                        'cnae_fiscal_secundaria': 'object',
-                                        'tipo_logradouro': 'object',
-                                        'logradouro': 'object',
-                                        'numero': 'object',
-                                        'complemento': 'object',
-                                        'bairro': 'object',
-                                        'cep': 'object',
-                                        'uf': 'object',
-                                        'municipio': 'object',
-                                        'ddd_1': 'object',
-                                        'telefone_1': 'object',
-                                        'ddd_2': 'object',
-                                        'telefone_2': 'object',
-                                        'ddd_fax': 'object',
-                                        'fax': 'object',
-                                        'correio_eletronico': 'object',
-                                        'situacao_especial': 'object',
-                                        'data_situacao_especial': 'object'}, 
-                                        divisions=divisoes)
     # Reparticionar em 10 partições
-    try:
-        del estabelecimento
-    except:
-        pass
                   
     extracted_file_path = os.path.join(extracted_files, arquivos_estabelecimento[e])
     estabelecimento = dd.read_csv(extracted_file_path,
@@ -492,39 +457,24 @@ logging.info(f"Ler arquivos de Socios")
 # Drop table antes do insert
 cur.execute('DROP TABLE IF EXISTS socios;')
 conexao.commit()
+column_names = ['cnpj_basico',
+                'identificador_socio',
+                'nome_socio_razao_social',
+                'cpf_cnpj_socio',
+                'qualificacao_socio',
+                'data_entrada_sociedade',
+                'pais',
+                'representante_legal',
+                'nome_do_representante',
+                'qualificacao_representante_legal',
+                'faixa_etaria']
 for e in range(0, len(arquivos_socios)):
     print('Trabalhando no arquivo: '+arquivos_socios[e]+' [...]')
-    column_names = ['cnpj_basico',
-                      'identificador_socio',
-                      'nome_socio_razao_social',
-                      'cpf_cnpj_socio',
-                      'qualificacao_socio',
-                      'data_entrada_sociedade',
-                      'pais',
-                      'representante_legal',
-                      'nome_do_representante',
-                      'qualificacao_representante_legal',
-                      'faixa_etaria']                      
+    logging.info(f"Trabalhando no arquivo: {arquivos_socios[e]} [...]")                  
     column_data = {name: [] for name in column_names}
     num_particoes = 10
     divisoes = np.linspace(0, 10000, num=num_particoes + 1).tolist()
-    socios = dd.DataFrame(column_data, 
-                            meta={'cnpj_basico': 'object',
-                                'identificador_socio': 'object',
-                                'nome_socio_razao_social': 'object',
-                                'cpf_cnpj_socio': 'object',
-                                'qualificacao_socio': 'object',
-                                'data_entrada_sociedade': 'object',
-                                'pais': 'object',
-                                'representante_legal': 'object',
-                                'nome_do_representante': 'object',
-                                'qualificacao_representante_legal': 'object',
-                                'faixa_etaria': 'object'}, divisions=divisoes)
     # Reparticionar em 10 partições
-    try:
-        del socios
-    except:
-        pass
 
     extracted_file_path = os.path.join(extracted_files, arquivos_socios[e])
     socios = dd.read_csv(extracted_file_path,
@@ -534,12 +484,11 @@ for e in range(0, len(arquivos_socios)):
                          header=None,
                          dtype='object',
                          encoding='latin1')
+    # Renomear colunas
+    socios.columns = column_names
     # Tratamento do arquivo antes de inserir na base:
     socios = socios.reset_index()
     del socios['index']
-
-    # Renomear colunas
-    socios.columns = column_names
 
     # Gravar dados no banco:
     # socios
@@ -569,31 +518,21 @@ logging.info(f"Ler arquivos de Simples Nacional")
 # Drop table antes do insert
 cur.execute('DROP TABLE IF EXISTS simples;')
 conexao.commit()
+column_names = ['cnpj_basico',
+                'opcao_pelo_simples',
+                'data_opcao_simples',
+                'data_exclusao_simples',
+                'opcao_mei',
+                'data_opcao_mei',
+                'data_exclusao_mei']
+
 for e in range(0, len(arquivos_simples)):
     print('Trabalhando no arquivo: '+arquivos_simples[e]+' [...]')
-    column_names = ['cnpj_basico',
-                    'opcao_pelo_simples',
-                    'data_opcao_simples',
-                    'data_exclusao_simples',
-                    'opcao_mei',
-                    'data_opcao_mei',
-                    'data_exclusao_mei']
+    logging.info(f"Trabalhando no arquivo: {arquivos_simples[e]} [...]")    
     column_data = {name: [] for name in column_names}
     num_particoes = 10
     divisoes = np.linspace(0, 10000, num=num_particoes + 1).tolist()
-    simples = dd.DataFrame(column_data, 
-                            meta={'cnpj_basico': 'object',
-                                    'opcao_pelo_simples': 'object',
-                                    'data_opcao_simples': 'object',
-                                    'data_exclusao_simples': 'object',
-                                    'opcao_mei': 'object',
-                                    'data_opcao_mei': 'object',
-                                    'data_exclusao_mei': 'object'}, divisions=divisoes)
     # Reparticionar em 10 partições
-    try:
-        del simples
-    except:
-        pass
 
     # Verificar tamanho do arquivo:
     print('Lendo o arquivo ' + arquivos_simples[e]+' [...]')
@@ -639,13 +578,13 @@ logging.info(f"Ler arquivos de CNAE")
 # Drop table antes do insert
 cur.execute('DROP TABLE IF EXISTS cnae;')
 conexao.commit()
+column_names = ['codigo', 'descricao']
 for e in range(0, len(arquivos_cnae)):
     print('Trabalhando no arquivo: '+arquivos_cnae[e]+' [...]')
-    column_names = ['codigo', 'descricao']
+    logging.info(f"Trabalhando no arquivo: {arquivos_cnae[e]} [...]")    
     column_data = {name: [] for name in column_names}
     num_particoes = 10
     divisoes = np.linspace(0, 10000, num=num_particoes + 1).tolist()
-    cnae = dd.DataFrame(column_data, meta={'codigo': 'object', 'descricao': 'object'}, divisions=divisoes)
     # Reparticionar em 10 partições
 
     extracted_file_path = os.path.join(extracted_files, arquivos_cnae[e])
@@ -692,18 +631,14 @@ logging.info(f"Ler arquivos de Situacao Atual")
 # Drop table antes do insert
 cur.execute('DROP TABLE IF EXISTS moti;')
 conexao.commit()
+column_names = ['codigo', 'descricao']
 for e in range(0, len(arquivos_moti)):
     print('Trabalhando no arquivo: '+arquivos_moti[e]+' [...]')
-    column_names = ['codigo', 'descricao']
+    logging.info(f"Trabalhando no arquivo: {arquivos_moti[e]} [...]")
     column_data = {name: [] for name in column_names}
     num_particoes = 10
     divisoes = np.linspace(0, 10000, num=num_particoes + 1).tolist()
-    moti = dd.DataFrame(column_data, meta={'codigo': 'object', 'descricao': 'object'}, divisions=divisoes)
     # Reparticionar em 10 partições
-    try:
-        del moti
-    except:
-        pass
 
     extracted_file_path = os.path.join(extracted_files, arquivos_moti[e])
     moti = dd.read_csv(extracted_file_path,
@@ -729,6 +664,7 @@ for e in range(0, len(arquivos_moti)):
         del moti
     except:
         pass
+
     print('Arquivos de moti finalizados!')
     moti_insert_end = time.time()
     moti_Tempo_insert = round((moti_insert_end - moti_insert_start))
@@ -748,18 +684,14 @@ logging.info(f"Ler arquivos de Municipios")
 # Drop table antes do insert
 cur.execute('DROP TABLE IF EXISTS munic;')
 conexao.commit()
+column_names = ['codigo', 'descricao']
 for e in range(0, len(arquivos_munic)):
     print('Trabalhando no arquivo: '+arquivos_munic[e]+' [...]')
-    column_names = ['codigo', 'descricao']
+    logging.info(f"Trabalhando no arquivo: {arquivos_munic[e]} [...]")
     column_data = {name: [] for name in column_names}
     num_particoes = 10
     divisoes = np.linspace(0, 10000, num=num_particoes + 1).tolist()
-    munic = dd.DataFrame(column_data, meta={'codigo': 'object', 'descricao': 'object'}, divisions=divisoes)
     # Reparticionar em 10 partições    
-    try:
-        del munic
-    except:
-        pass
 
     extracted_file_path = os.path.join(extracted_files, arquivos_munic[e])
     munic = dd.read_csv(extracted_file_path, 
@@ -803,18 +735,14 @@ logging.info(f"Ler arquivos de Natureza Juridica")
 # Drop table antes do insert
 cur.execute('DROP TABLE IF EXISTS natju;')
 conexao.commit()
+column_names = ['codigo', 'descricao']
 for e in range(0, len(arquivos_natju)):
     print('Trabalhando no arquivo: '+arquivos_natju[e]+' [...]')
-    column_names = ['codigo', 'descricao']
+    logging.info(f"Trabalhando no arquivo: {arquivos_natju[e]} [...]")
     column_data = {name: [] for name in column_names}
     num_particoes = 10
     divisoes = np.linspace(0, 10000, num=num_particoes + 1).tolist()
-    natju = dd.DataFrame(column_data, meta={'codigo': 'object', 'descricao': 'object'}, divisions=divisoes)
     # Reparticionar em 10 partições    
-    try:
-        del natju
-    except:
-        pass
 
     extracted_file_path = os.path.join(extracted_files, arquivos_natju[e])
     natju = dd.read_csv(extracted_file_path, 
@@ -834,7 +762,7 @@ for e in range(0, len(arquivos_natju)):
     # natju
     for i in range(natju.npartitions):
         df_chunk = natju.get_partition(i)
-        process_and_insert_chunk(df_chunk, conexao,'emprenatjusa')     
+        process_and_insert_chunk(df_chunk, conexao,'natju')     
 
 
     print('Arquivos de natju finalizados!')
@@ -856,18 +784,14 @@ logging.info(f"Ler arquivos de PAIS")
 # Drop table antes do insert
 cur.execute('DROP TABLE IF EXISTS pais;')
 conexao.commit()
+column_names = ['codigo', 'descricao']
 for e in range(0, len(arquivos_pais)):
     print('Trabalhando no arquivo: '+arquivos_pais[e]+' [...]')
-    column_names = ['codigo', 'descricao']
+    logging.info(f"Trabalhando no arquivo: {arquivos_pais[e]} [...]")
     column_data = {name: [] for name in column_names}
     num_particoes = 10
     divisoes = np.linspace(0, 10000, num=num_particoes + 1).tolist()
-    pais = dd.DataFrame(column_data, meta={'codigo': 'object', 'descricao': 'object'}, divisions=divisoes)
     # Reparticionar em 10 partições
-    try:
-        del pais
-    except:
-        pass
 
     extracted_file_path = os.path.join(extracted_files, arquivos_pais[e])
     pais = dd.read_csv(extracted_file_path, 
@@ -910,22 +834,17 @@ logging.info(f"Ler arquivos de Qualificacao de Socios")
 # Drop table antes do insert
 cur.execute('DROP TABLE IF EXISTS quals;')
 conexao.commit()
-
+column_names = ['codigo', 'descricao']
 for e in range(0, len(arquivos_quals)):
     print('Trabalhando no arquivo: '+arquivos_quals[e]+' [...]')
-    column_names = ['codigo', 'descricao']
+    logging.info(f"Trabalhando no arquivo: {arquivos_quals[e]} [...]")
     column_data = {name: [] for name in column_names}
     num_particoes = 10
     divisoes = np.linspace(0, 10000, num=num_particoes + 1).tolist()
-    quals = dd.DataFrame(column_data, meta={'codigo': 'object', 'descricao': 'object'}, divisions=divisoes)
     # Reparticionar em 10 partições
-    try:
-        del quals
-    except:
-        pass
 
     extracted_file_path = os.path.join(extracted_files, arquivos_quals[e])
-    quals = dd.requalad_csv(extracted_file_path, 
+    quals = dd.read_csv(extracted_file_path, 
                             sep=';',
                             skiprows=0, 
                             header=None, 
