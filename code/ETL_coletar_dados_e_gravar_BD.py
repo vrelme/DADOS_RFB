@@ -111,8 +111,7 @@ def process_and_insert_chunk(df_chunk, conexao, table_name):
     try:
         # Cria a engine do SQLAlchemy com a string de conexão
         engine = sqlalchemy.create_engine(conexao)
-        print(table_name)
-        print(conexao)
+        
     
         # Insere o DataFrame no banco de dados
         df_chunk.to_sql(table_name, con=engine, if_exists='append', index=False)
@@ -296,8 +295,8 @@ try:
                 use_pure=True
                 #auth_plugin='caching_sha2_password' 
                 )
-    connection_uri = f"mysql+mysqlconnector://{os.getenv('db_user')}:{os.getenv('db_password')}@{os.getenv('db_host')}:{os.getenv('DB_PORT')}/{os.getenv('db_name')}"
-    cur = conexao.cursor()
+    cnx = f"mysql+mysqlconnector://{os.getenv('db_user')}:{os.getenv('db_password')}@{os.getenv('db_host')}:{os.getenv('DB_PORT')}/{os.getenv('db_name')}"
+    cur = cnx.cursor()
 
 except mysql.connector.Error as e:
     logging.error(f"Erro na thread {e}")
@@ -318,7 +317,7 @@ i=0
 logging.info(f"Ler arquivos de Empresa")
 # Drop table antes do insert
 cur.execute('DROP TABLE IF EXISTS empresa;')
-conexao.commit()
+cnx.commit()
 column_names = ['cnpj_basico', 'razao_social', 'natureza_juridica', 'qualificacao_responsavel', 'capital_social', 'porte_empresa', 'ente_federativo_responsavel']
 for e in range(0, len(arquivos_empresa)):
     print('Trabalhando no arquivo: '+arquivos_empresa[e]+' [...]')
@@ -351,7 +350,7 @@ for e in range(0, len(arquivos_empresa)):
     
     for i in range(empresa.npartitions):
         df_chunk = empresa.get_partition(i)
-        process_and_insert_chunk(df_chunk, connection_uri,'empresa')
+        process_and_insert_chunk(df_chunk, cnx,'empresa')
 
     try:
         del empresa
@@ -918,7 +917,8 @@ if cnpj_basico!="":
     index_time = round(index_end - index_start)
     print('Tempo para criar os índices (em segundos): ' + str(index_time))
     # Encerramento da thread (exemplo simplificado)
-
+    cur.close()
+    cnx.close()
     # %%
     print("""Processo 100% finalizado! Você já pode usar seus dados no BD!
      - Desenvolvido por: Aphonso Henrique do Amaral Rafael
