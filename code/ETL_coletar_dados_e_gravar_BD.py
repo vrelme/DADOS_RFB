@@ -133,6 +133,8 @@ def process_and_insert_chunk(df_chunk, conexao, table_name):
 
         # Verificar se a conexão foi estabelecida
         try:
+
+            logging.info(f"Estabelecer conexão com o banco de dados {table_name}")
             with engine.connect() as connection:
                 logging.info(f"Conexão com o banco de dados {table_name} estabelecida com sucesso")
                 
