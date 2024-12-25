@@ -1,33 +1,48 @@
-2024-12-23 01:31:57,777 - INFO - Iniciando o processo de carga
-2024-12-23 01:31:57,778 - INFO - Carregar variáveis de ambiente
-2024-12-23 01:31:57,779 - INFO - Variáveis de ambiente carregadas
-2024-12-23 01:31:57,779 - INFO - Definir diretórios
-2024-12-23 01:31:57,779 - INFO - Retornar valor da variável de ambiente
-2024-12-23 01:31:57,779 - INFO - Criar diretório
-2024-12-23 01:31:57,780 - INFO - Diretório D:\OPERACAO\OUTPUT_FILES criado com sucesso
-2024-12-23 01:31:57,780 - INFO - Retornar valor da variável de ambiente
-2024-12-23 01:31:57,780 - INFO - Criar diretório
-2024-12-23 01:31:57,780 - INFO - Diretório D:\OPERACAO\EXTRACTED_FILES criado com sucesso
-2024-12-23 01:31:57,780 - INFO - Diretórios definidos: output_files: D:\OPERACAO\OUTPUT_FILES, extracted_files: D:\OPERACAO\EXTRACTED_FILES
-2024-12-23 01:31:57,781 - INFO - Obter dados da URL
-2024-12-23 01:31:59,896 - INFO - Extrair arquivos
-2024-12-23 01:31:59,904 - INFO - Arquivos encontrados: []
-2024-12-23 01:31:59,904 - INFO - Baixar arquivos
-2024-12-23 01:31:59,905 - INFO - Fim do Download doa arquivos
-2024-12-23 01:31:59,905 - INFO - Descompactar arquivos
-2024-12-23 01:31:59,905 - INFO - Fim descompactando arquivo
-2024-12-23 01:31:59,905 - INFO - Listar arquivos
-2024-12-23 01:31:59,906 - INFO - LER E INSERIR DADOS
-2024-12-23 01:31:59,906 - INFO - Separar arquivos
-2024-12-23 01:31:59,906 - INFO - Separar arquivos
-2024-12-23 01:31:59,906 - INFO - Acesso ao banco de dados
-2024-12-23 01:31:59,906 - INFO - Conectar ao banco de dados
-2024-12-23 01:32:00,048 - INFO - package: mysql.connector.plugins
-2024-12-23 01:32:00,048 - INFO - plugin_name: caching_sha2_password
-2024-12-23 01:32:00,048 - INFO - AUTHENTICATION_PLUGIN_CLASS: MySQLCachingSHA2PasswordAuthPlugin
-2024-12-23 01:32:00,059 - INFO - Conexão com o banco de dados estabelecida com sucesso
-2024-12-23 01:32:00,093 - INFO - Processar arquivos de empresa
-2024-12-23 01:32:00,094 - INFO - Trabalhando no arquivo: K3241.K03200Y0.D41109.EMPRECSV [...]
-2024-12-23 01:33:15,945 - INFO - Gravar dados no banco empresa
-2024-12-23 01:33:15,950 - INFO - URI de conexao: mysql+mysqlconnector://root:m)IyXIM72({y@localhost:3306/u266818497_dados_rfb
-2024-12-23 01:33:19,172 - INFO - Engine criado com sucesso para empresa
+2024-12-25 08:37:03,114 - INFO - Iniciando o processo de carga
+2024-12-25 08:37:03,114 - INFO - Carregar variáveis de ambiente
+2024-12-25 08:37:03,116 - INFO - Variáveis de ambiente carregadas
+2024-12-25 08:37:03,116 - INFO - Definir diretórios
+2024-12-25 08:37:03,116 - INFO - Retornar valor da variável de ambiente
+2024-12-25 08:37:03,116 - INFO - Criar diretório
+2024-12-25 08:37:03,117 - INFO - Diretório D:\OPERACAO\OUTPUT_FILES criado com sucesso
+2024-12-25 08:37:03,117 - INFO - Retornar valor da variável de ambiente
+2024-12-25 08:37:03,117 - INFO - Criar diretório
+2024-12-25 08:37:03,117 - INFO - Diretório D:\OPERACAO\EXTRACTED_FILES criado com sucesso
+2024-12-25 08:37:03,117 - INFO - Diretórios definidos: output_files: D:\OPERACAO\OUTPUT_FILES, extracted_files: D:\OPERACAO\EXTRACTED_FILES
+2024-12-25 08:37:03,118 - INFO - Obter dados da URL
+2024-12-25 08:37:05,205 - INFO - Extrair arquivos
+2024-12-25 08:37:05,211 - INFO - Arquivos encontrados: []
+2024-12-25 08:37:05,211 - INFO - Baixar arquivos
+2024-12-25 08:37:05,212 - INFO - Fim do Download doa arquivos
+2024-12-25 08:37:05,212 - INFO - Descompactar arquivos
+2024-12-25 08:37:05,212 - INFO - Fim descompactando arquivo
+2024-12-25 08:37:05,212 - INFO - Listar arquivos
+2024-12-25 08:37:05,217 - INFO - LER E INSERIR DADOS
+2024-12-25 08:37:05,217 - INFO - Separar arquivos
+2024-12-25 08:37:05,217 - INFO - Separar arquivos
+2024-12-25 08:37:05,217 - INFO - Acesso ao banco de dados
+2024-12-25 08:37:05,217 - INFO - Conectar ao banco de dados
+2024-12-25 08:37:05,389 - INFO - package: mysql.connector.plugins
+2024-12-25 08:37:05,389 - INFO - plugin_name: caching_sha2_password
+2024-12-25 08:37:05,389 - INFO - AUTHENTICATION_PLUGIN_CLASS: MySQLCachingSHA2PasswordAuthPlugin
+2024-12-25 08:37:05,431 - INFO - Conexão com o banco de dados estabelecida com sucesso
+2024-12-25 08:37:05,526 - INFO - Processar arquivos de empresa
+2024-12-25 08:37:05,526 - INFO - Trabalhando no arquivo: K3241.K03200Y0.D41109.EMPRECSV [...]
+2024-12-25 08:37:59,533 - INFO - Gravar dados no banco empresa
+2024-12-25 08:37:59,709 - INFO - Tabela empresa não existe. Criando tabela.
+2024-12-25 08:37:59,783 - INFO - Tabela empresa criada com sucesso
+2024-12-25 08:37:59,784 - INFO - Processo para inserir os dados no banco empresa
+2024-12-25 08:45:28,283 - ERROR - Erro ao inserir dados na tabela empresa: 2055: Lost connection to MySQL server at 'localhost:3306', system error: Errno 10054: Foi forçado o cancelamento de uma conexão existente pelo host remoto
+2024-12-25 08:45:28,320 - INFO - Tentando reconectar ao banco de dados...
+2024-12-25 08:45:28,600 - INFO - Reconexão bem-sucedida.
+2024-12-25 08:45:28,601 - INFO - Finalizando processo de inserção de dados na tabela empresa
+2024-12-25 08:45:28,677 - INFO - Processo para inserir os dados no banco empresa
+2024-12-25 08:52:54,689 - ERROR - Erro ao inserir dados na tabela empresa: 2055: Lost connection to MySQL server at 'localhost:3306', system error: Errno 10054: Foi forçado o cancelamento de uma conexão existente pelo host remoto
+2024-12-25 08:52:54,716 - INFO - Tentando reconectar ao banco de dados...
+2024-12-25 08:52:54,994 - INFO - Reconexão bem-sucedida.
+2024-12-25 08:52:54,994 - INFO - Finalizando processo de inserção de dados na tabela empresa
+2024-12-25 08:52:55,057 - INFO - Processo para inserir os dados no banco empresa
+2024-12-25 09:00:27,086 - ERROR - Erro ao inserir dados na tabela empresa: 2055: Lost connection to MySQL server at 'localhost:3306', system error: Errno 10054: Foi forçado o cancelamento de uma conexão existente pelo host remoto
+2024-12-25 09:00:27,115 - ERROR - Falha ao inserir dados na tabela empresa após 3 tentativas
+2024-12-25 09:00:27,115 - INFO - Finalizando processo de inserção de dados na tabela empresa
+2024-12-25 09:00:27,134 - ERROR - Erro ao processar os arquivos de empresa: 2055: Lost connection to MySQL server at 'localhost:3306', system error: Errno 10054: Foi forçado o cancelamento de uma conexão existente pelo host remoto

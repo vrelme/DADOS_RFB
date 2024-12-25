@@ -1,7 +1,4 @@
 from dotenv import load_dotenv
-from sqlalchemy import create_engine
-from sqlalchemy import inspect
-from sqlalchemy.exc import OperationalError, TimeoutError
 import bs4 as bs
 import csv
 import dask.dataframe as dd
@@ -10,13 +7,12 @@ import hashlib
 import logging
 import lxml
 import mysql.connector
+from mysql.connector.errors import OperationalError
 import numpy as np
 import os
 import pandas as pd
 import re
 import requests
-import sql
-import sqlalchemy
 import sys
 import time
 import urllib.parse
@@ -26,7 +22,7 @@ import zipfile
 
 # Configuração do logging
 logging.basicConfig(filename='DADOS_RFB.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-    
+
 def main():
     cnpj_basico=''
     current = 1
@@ -109,64 +105,6 @@ def makedirs_custom(path, exist_ok=True, mode=0o755):
     except OSError as e:
         logging.error(f"Erro ao criar diretório {path}: {e}")
         return False
-def process_and_insert_chunk(df_chunk, conexao, table_name):
-    """
-        Grava dados no banco de dados.
-
-        Args:
-        df_chunk (pd.DataFrame): DataFrame contendo os dados a serem inseridos.
-        conexao (sqlalchemy.engine.base.Engine): Conexão com o banco de dados.
-        table_name (str): Nome da tabela no banco de dados.
-    """
-    logging.info(f"Gravar dados no banco {table_name}")
-    try:
-        connection_uri = f"mysql+mysqlconnector://{os.getenv('db_user')}:{os.getenv('db_password')}@{os.getenv('db_host')}:{os.getenv('DB_PORT')}/{os.getenv('db_name')}"         
-        logging.info(f'URI de conexao: {connection_uri}')
-
-        # Tentar conectar ao banco de dados
-        try:
-            engine = sqlalchemy.create_engine(connection_uri)
-            logging.info(f'Engine criado com sucesso para {table_name}')
-        except Exception as e:
-            logging.error(f"Erro ao criar Engine para {table_name}: {e}")
-            return
-
-        # Verificar se a conexão foi estabelecida
-        try:
-
-            logging.info(f"Estabelecer conexão com o banco de dados {table_name}")
-            with engine.connect() as connection:
-                logging.info(f"Conexão com o banco de dados {table_name} estabelecida com sucesso")
-                
-                # verificar se a tabela existe
-                inspector = inspect(engine)
-                if not inspector.has_table(table_name):
-                    logging.info(f"Tabela {table_name} não existe. Criando tabela.")
-                    df_chunk.head(0).to_sql(table_name, engine, if_exists='replace', index=False)    
-                    logging.info(f"Tabela {table_name} criada com sucesso")
-
-                # Processo para inserir os dados no banco
-                logging.info(f"Processo para inserir os dados no banco {table_name}")
-                df_chunk.to_sql(table_name, engine, if_exists='append', index=False)
-                logging.info(f"Tabela: {table_name} inserido com sucesso no banco de dados")
-
-        except TimeoutError as e:
-            logging.error(f"Erro ao timeout ao banco de dados {table_name}: {e}")
-            print(f"Erro ao timeout ao banco de dados {table_name}: {e}")
-            return
-        except OperationalError as e:
-            logging.error(f"Erro ao operacional ao banco de dados {table_name}: {e}")
-            print(f"Erro ao operacional ao banco de dados {table_name}: {e}")
-            return
-        except Exception as e:
-            logging.error(f"Erro ao conectar ao banco de dados {table_name}: {e}")
-            print(f"Erro ao conectar ao banco de dados {table_name}: {e}")
-            return
-    except Exception as e:
-        logging.error(f"Erro ao inserir dados na tabela {table_name}: {e}")
-        print(f"Erro ao inserir dados na tabela {table_name}: {e}")
-    finally:
-        logging.info(f"Finalizando processo de inserção de dados na tabela {table_name}")
 def getEnv(env):
     """
     Retorna o valor de uma variável de ambiente.
@@ -400,43 +338,55 @@ def connect_to_database():
             database=os.getenv('db_name'),
             use_pure=True
         )
-        cur = conexao.cursor()
         logging.info("Conexão com o banco de dados estabelecida com sucesso")
-        return conexao, cur
+        return conexao
     except mysql.connector.Error as e:
         logging.error(f"Erro ao conectar ao banco de dados: {e}")
         print(f"Erro ao conectar ao banco de dados: {e}")
         raise
-def cursor():
-    """Cria um cursor para a conexão com o banco de dados.
+def duracao_processo(start_time, end_time):
+    """Calcula a duração do processo.
+
+    Args:
+        start_time (float): Tempo de início do processo.
+        end_time (float): Tempo de fim do processo.
 
     Returns:
-        mysql.connector.cursor.MySQLCursor: Cursor para a conexão com o banco de dados.
+        int: Duração do processo em segundos.
     """
     try:
-        logging.info(f"Criar cursor")
-        conexao = connect_to_database()
-        cur = conexao.cursor()
-        return cur
-    except mysql.connector.Error as e:
-        logging.error(f"Erro ao criar cursor: {e}")
-        print(f"Erro ao criar cursor: {e}")
+        logging.info(f'Duração do processo: {end_time - start_time}')
+        return
+    except Exception as e:
+        logging.error(f"Erro ao calcular a duração do processo: {e}")
+        print(f"Erro ao calcular a duração do processo: {e}")
         raise
-def processar_arquivos_empresa(arquivos_empresa, extracted_files, conexao, cur):
+def processar_arquivos_empresa(arquivos_empresa, extracted_files, conexao):
     """Processa os arquivos de empresa.
 
     Args:
         arquivos_empresa (list): Lista de arquivos de empresa.
         extracted_files (str): Caminho do diretório onde os arquivos foram extraídos.
         conexao (mysql.connector.connection.MySQLConnection): Conexão com o banco de dados.
-        cur (mysql.connector.cursor.MySQLCursor): Cursor para executar comandos SQL.
     """
     try:
-        empresa_insert_start = time.time()
+        start_time = time.time()
         table_name = 'empresa'
+        table_schema = """
+        CREATE TABLE empresa (
+            cnpj_basico VARCHAR(14),
+            razao_social VARCHAR(255),
+            natureza_juridica VARCHAR(255),
+            qualificacao_responsavel VARCHAR(255),
+            capital_social DECIMAL(15, 2),
+            porte_empresa VARCHAR(255),
+            ente_federativo_responsavel VARCHAR(255)
+        )
+        """
         num_particoes = 10
+        cursor = conexao.cursor()
         # Drop table antes do insert
-        cur.execute('DROP TABLE IF EXISTS empresa;')
+        cursor.execute('DROP TABLE IF EXISTS empresa;')
         conexao.commit()
         column_names = ['cnpj_basico', 'razao_social', 'natureza_juridica', 'qualificacao_responsavel', 'capital_social', 'porte_empresa', 'ente_federativo_responsavel']
         logging.info(f"Processar arquivos de empresa")
@@ -451,30 +401,69 @@ def processar_arquivos_empresa(arquivos_empresa, extracted_files, conexao, cur):
                     for i, col in enumerate(column_names):
                         column_data[col].append(row[i])
 
-                # Cria a engine do SQLAlchemy com a string de conexão
-                df = dd.from_pandas(pd.DataFrame(column_data), npartitions=num_particoes)
+                df = pd.DataFrame(column_data)
                 
                 # Insere o DataFrame no banco de dados
-                # Gravar dados no banco:
-                process_and_insert_chunk(df, conexao, 'empresa')
+                process_and_insert_chunk(df, conexao, 'empresa', table_schema)
 
-            print('Arquivos de empresa finalizados!')
-            empresa_insert_end = time.time()
-            empresa_Tempo_insert = round((empresa_insert_end - empresa_insert_start))
-            print('Tempo de execução do processo de empresa (em segundos): ' + str(empresa_Tempo_insert))  
-
+            end_time = time.time()
+            duracao_processo(start_time, end_time)
     except mysql.connector.Error as e:
         logging.error(f"Erro ao processar os arquivos de empresa: {e}")
         print(f"Erro ao processar os arquivos de empresa: {e}")
         raise
-def processar_arquivos_estabelecimento(arquivos_estabelecimento):
+def processar_arquivos_estabelecimento(arquivos_estabelecimento, extracted_files, conexao):
     """Processa os arquivos de estabelecimento.
 
     Args:
         arquivos_estabelecimento (list): Lista de arquivos de estabelecimento.
+        extracted_files (str): Caminho do diretório onde os arquivos foram extraídos.
+        conexao (mysql.connector.connection.MySQLConnection): Conexão com o banco de dados.
     """
+
     try:
-        logging.info(f"Processar arquivos de estabelecimento")
+        start_time = time.time()
+        table_name = 'estabelecimento'
+        logging.info(f'Processar arquivos de {table_name}')
+        table_schema = """
+        CREATE TABLE estabelecimento (
+            cnpj_basico VARCHAR(8),
+            cnpj_ordem VARCHAR(4),
+            cnpj_dv VARCHAR(2),
+            identificador_matriz_filial VARCHAR(1),
+            situacao_cadastral VARCHAR(2),
+            data_situacao VARCHAR(8),
+            motivo_situacao_cadastral VARCHAR(2),
+            nome_cidade_exterior VARCHAR(55),
+            codigo_pais VARCHAR(5),
+            data_inicio_atividade VARCHAR(8),
+            cnae_fiscal_principal VARCHAR(7),
+            cnae_fiscal_secundaria VARCHAR(7),
+            tipo_logradouro VARCHAR(20),
+            logradouro VARCHAR(60),
+            numero VARCHAR(6),
+            complemento VARCHAR(156),
+            bairro VARCHAR(50),
+            cep VARCHAR(8),
+            uf VARCHAR(2),
+            municipio VARCHAR(50),
+            ddd_1 VARCHAR(4),
+            telefone_1 VARCHAR(12),
+            ddd_2 VARCHAR(4),
+            telefone_2 VARCHAR(12),
+            dd_fax VARCHAR(4),
+            fax VARCHAR(12),
+            correio_eletronico VARCHAR(115),
+            situacao_especial VARCHAR(23),
+            data_situacao_especial VARCHAR(8)
+        )
+        """        
+        num_particoes = 10
+        cursor = conexao.cursor()
+        # Drop table antes do insert
+        cursor.execute('DROP TABLE IF EXISTS estabelecimento;')
+        conexao.commit()
+        column_names = ['cnpj_basico', 'razao_social', 'natureza_juridica', 'qualificacao_responsavel', 'capital_social', 'porte_empresa', 'ente_federativo_responsavel']
         for e in range(0, len(arquivos_estabelecimento)):
             print('Trabalhando no arquivo: '+arquivos_estabelecimento[e]+' [...]')
             logging.info(f"Trabalhando no arquivo: {arquivos_estabelecimento[e]} [...]")
@@ -486,419 +475,467 @@ def processar_arquivos_estabelecimento(arquivos_estabelecimento):
                     for i, col in enumerate(column_names):
                         column_data[col].append(row[i])
 
-                # Cria a engine do SQLAlchemy com a string de conexão
-                df = dd.from_pandas(pd.DataFrame(column_data), npartitions=num_particoes)
+                df = pd.DataFrame(column_data)
                 
-            
                 # Insere o DataFrame no banco de dados
-                # Gravar dados no banco:
+                process_and_insert_chunk(df, conexao, 'estabelecimento', table_schema)
 
-                process_and_insert_chunk(df, conexao,'estabelecimento')
+            end_time = time.time()
+            duracao_processo(start_time, end_time)
 
-            print('Arquivos de estabelecimento finalizados!')
-            estabelecimento_insert_end = time.time()
-            estabelecimento_Tempo_insert = round((estabelecimento_insert_end - estabelecimento_insert_start))
-            print('Tempo de execução do processo de estabelecimento (em segundos): ' + str(estabelecimento_Tempo_insert))  
-
-    except Exception as e:
-        logging.error(f"Erro ao processar os arquivos de estabelecimento: {e}")
-        print(f"Erro ao processar os arquivos de estabelecimento: {e}")
-        raise
-def processar_arquivos_socios(arquivos_socios):
+    except mysql.connector.Error as e:
+        logging.error(f"Erro ao processar a tabela {table_name}: {e}")
+        
+        # Tentar reconectar ao banco de dados
+    finally:
+        if cursor is not None:
+            cursor.close()
+        logging.info(f"Finalizando processo de inserção de dados na tabela {table_name}")
+def processar_arquivos_socios(arquivos_socios, extracted_files, conexao):
     """Processa os arquivos de sócios.
 
     Args:
         arquivos_socios (list): Lista de arquivos de sócios.
+        extracted_files (str): Caminho do diretório onde os arquivos foram extraídos.
+        conexao (mysql.connector.connection.MySQLConnection): Conexão com o banco de dados.
     """
     try:
-        logging.info(f"Processar arquivos de sócios")
+        start_time = time.time()
+        table_name = 'socios'
+        logging.info(f"Processar arquivos de {table_name}")
+        table_schema = """
+        CREATE TABLE socios (
+            cnpj_basico VARCHAR(14),
+            identificador_socio VARCHAR(1),
+            nome_socio VARCHAR(60),
+            cnpj_cpf_socio VARCHAR(14),
+            qualificacao_socio VARCHAR(2),
+            data_entrada_sociedade VARCHAR(8),
+            pais VARCHAR(50),
+            representante_legal VARCHAR(1),
+            nome_representante_legal VARCHAR(60),
+            qualificacao_representante_legal VARCHAR(2),
+            faixa_etaria VARCHAR(1)
+        )
+        """
+        num_particoes = 10
+        cursor = conexao.cursor()
+        # Drop table antes do insert
+        cursor.execute('DROP TABLE IF EXISTS socios;')
+        conexao.commit()
+        column_names = ['cnpj_basico', 'razao_social', 'natureza_juridica', 'qualificacao_responsavel', 'capital_social', 'porte_empresa', 'ente_federativo_responsavel']
         for e in range(0, len(arquivos_socios)):
             print('Trabalhando no arquivo: '+arquivos_socios[e]+' [...]')
             logging.info(f"Trabalhando no arquivo: {arquivos_socios[e]} [...]")
-            column_data = {name: [] for name in column_names}
-            num_particoes = 10
-            divisoes = np.linspace(0, 10000, num=num_particoes + 1).tolist()
-            # Reparticionar em 10 partições
-
             extracted_file_path = os.path.join(extracted_files, arquivos_socios[e])
-            socios = dd.read_csv(extracted_file_path,
-                                sep=';',
-                                # nrows=100,
-                                skiprows=0,
-                                header=None,
-                                dtype='object',
-                                encoding='latin1')
-            # Renomear colunas
-            socios.columns = column_names
-            # Tratamento do arquivo antes de inserir na base:
-            socios = socios.reset_index()
-            del socios['index']
+            column_data = {name: [] for name in column_names}
+            with open(extracted_file_path, 'r', encoding='latin1') as f:
+                reader = csv.reader(f,delimiter=';')
+                for row in reader:
+                    for i, col in enumerate(column_names):
+                        column_data[col].append(row[i])
 
-            # Gravar dados no banco:
-            # socios
-            for i in range(socios.npartitions):
-                df_chunk = socios.get_partition(i)
-                process_and_insert_chunk(df_chunk, conexao,'socios')
+                df = pd.DataFrame(column_data)
+                
+                # Insere o DataFrame no banco de dados
+                process_and_insert_chunk(df, conexao, 'socios', table_schema)
 
-            try:
-                del socios
-            except:
-                pass
-            print('Arquivos de socios finalizados!')
-            socios_insert_end = time.time()
-            socios_Tempo_insert = round((socios_insert_end - socios_insert_start))
-            print('Tempo de execução do processo de sócios (em segundos): ' + str(socios_Tempo_insert))
-
-    except Exception as e:
-        logging.error(f"Erro ao processar os arquivos de sócios: {e}")
-        print(f"Erro ao processar os arquivos de sócios: {e}")
+            end_time = time.time()
+            duracao_processo(start_time, end_time)
+        
+    except mysql.connector.Error as e:
+        logging.error(f"Erro ao processar os arquivos de {table_name}: {e}")
+        print(f"Erro ao processar os arquivos de {table_name}: {e}")
         raise
-def processar_arquivos_simples(arquivos_simples):
+def processar_arquivos_simples(arquivos_simples, extracted_files, conexao):
     """Processa os arquivos de Simples Nacional.
 
     Args:
         arquivos_simples (list): Lista de arquivos de Simples Nacional.
+        extracted_files (str): Caminho do diretório onde os arquivos foram extraídos.
+        conexao (mysql.connector.connection.MySQLConnection): Conexão com o banco de dados.
     """
     try:
-        logging.info(f"Processar arquivos de Simples Nacional")
+        start_time = time.time()
+        table_name = 'simples'
+        logging.info(f"Processar arquivos de {table_name}")
+        table_schema = """
+        CREATE TABLE simples (
+            cnpj_basico VARCHAR(8),
+            opcao_simples VARCHAR(1),
+            data_opcao_simples VARCHAR(8),
+            data_exclusao_simples VARCHAR(8),
+            opcao_mei VARCHAR(1),
+            data_opcao_mei VARCHAR(8),
+            data_exclusao_mei VARCHAR(8)
+        )
+        """
+        num_particoes = 10
+        cursor = conexao.cursor()
+        # Drop table antes do insert
+        cursor.execute('DROP TABLE IF EXISTS simples;')
+        conexao.commit()
+        column_names = ['cnpj_basico', 'opcao_simples', 'data_opcao_simples', 'data_exclusao_simples', 'opcao_mei', 'data_opcao_mei', 'data_exclusao_mei']
         for e in range(0, len(arquivos_simples)):
             print('Trabalhando no arquivo: '+arquivos_simples[e]+' [...]')
             logging.info(f"Trabalhando no arquivo: {arquivos_simples[e]} [...]")
-            column_data = {name: [] for name in column_names}
-            num_particoes = 10
-            divisoes = np.linspace(0, 10000, num=num_particoes + 1).tolist()
-            # Reparticionar em 10 partições
-
             extracted_file_path = os.path.join(extracted_files, arquivos_simples[e])
-            simples = dd.read_csv(extracted_file_path,
-                                sep=';',
-                                # nrows=100,
-                                skiprows=0,
-                                header=None,
-                                dtype='object',
-                                encoding='latin1')
-            # Renomear colunas
-            simples.columns = column_names
-            # Tratamento do arquivo antes de inserir na base:
-            simples = simples.reset_index()
-            del simples['index']
-            # Gravar dados no banco:
-            # simples
-            for i in range(simples.npartitions):
-                df_chunk = simples.get_partition(i)
-                process_and_insert_chunk(df_chunk, conexao,'simples')
+            column_data = {name: [] for name in column_names}
+            with open(extracted_file_path, 'r', encoding='latin1') as f:
+                reader = csv.reader(f,delimiter=';')
+                for row in reader:
+                    for i, col in enumerate(column_names):
+                        column_data[col].append(row[i])
 
-            try:
-                del simples
-            except:
-                pass
-
-            print('Arquivos do simples finalizados!')
-            simples_insert_end = time.time()
-            simples_Tempo_insert = round((simples_insert_end - simples_insert_start))
-            print('Tempo de execução do processo do Simples Nacional (em segundos): ' + str(simples_Tempo_insert))
+                df = pd.DataFrame(column_data)
+                
+                # Insere o DataFrame no banco de dados
+                process_and_insert_chunk(df, conexao, 'simples', table_schema)
+      
+            end_time = time.time()
+            duracao_processo(start_time, end_time)
 
     except Exception as e:
-        logging.error(f"Erro ao processar os arquivos de Simples Nacional: {e}")
-        print(f"Erro ao processar os arquivos de Simples Nacional: {e}")
-    processar_arquivos_cnae(arquivos['cnae'], extracted_files, conexao, cur)
-def processar_arquivos_cnae(arquivos_cnae):
+        logging.error(f"Erro ao processar os arquivos de {table_name}: {e}")
+        print(f"Erro ao processar os arquivos de Simples {table_name}: {e}")
+def processar_arquivos_cnae(arquivos_cnae, extracted_files, conexao):
     """Processa os arquivos de CNAE.
 
     Args:
         arquivos_cnae (list): Lista de arquivos de CNAE.
+        extracted_files (str): Caminho do diretório onde os arquivos foram extraídos.
+        conexao (mysql.connector.connection.MySQLConnection): Conexão com o banco de dados.
     """
     try:
-        logging.info(f"Processar arquivos de CNAE")
+        start_time = time.time()
+        table_name = 'cnae'
+        table_schema = """
+        CREATE TABLE cnae (
+            codigo_cnae VARCHAR(7),
+            descricao_cnae VARCHAR(255)
+            )
+        """
+        num_particoes = 10
+        cursor = conexao.cursor()
+        # Drop table antes do insert
+        cursor.execute('DROP TABLE IF EXISTS cnae;')
+        conexao.commit()
+        column_names = ['codigo_cnae', 'descricao_cnae']
+        logging.info(f"Processar arquivos de {table_name}")
         for e in range(0, len(arquivos_cnae)):
             print('Trabalhando no arquivo: '+arquivos_cnae[e]+' [...]')
             logging.info(f"Trabalhando no arquivo: {arquivos_cnae[e]} [...]")
-            column_data = {name: [] for name in column_names}
-            num_particoes = 10
-            divisoes = np.linspace(0, 10000, num=num_particoes + 1).tolist()
-            # Reparticionar em 10 partições
-
             extracted_file_path = os.path.join(extracted_files, arquivos_cnae[e])
-            cnae = dd.read_csv(extracted_file_path,
-                                sep=';',
-                                # nrows=100,
-                                skiprows=0,
-                                header=None,
-                                dtype='object',
-                                encoding='latin1')
-            # Renomear colunas
-            cnae.columns = column_names
+            column_data = {name: [] for name in column_names}
+            with open(extracted_file_path, 'r', encoding='latin1') as f:
+                reader = csv.reader(f,delimiter=';')
+                for row in reader:
+                    for i, col in enumerate(column_names):
+                        column_data[col].append(row[i])
 
-            # Tratamento do arquivo antes de inserir na base:
-            cnae = cnae.reset_index()
-            del cnae['index']
-
-            # Gravar dados no banco:
-            # cnae
-            for i in range(cnae.npartitions):
-                df_chunk = cnae.get_partition(i)
-                process_and_insert_chunk(df_chunk, conexao,'cnae')
-
-            try:
-                del cnae
-            except:
-                pass
-            print('Arquivos de cnae finalizados!')
-            cnae_insert_end = time.time()
-            cnae_Tempo_insert = round((cnae_insert_end - cnae_insert_start))
-            print('Tempo de execução do processo de cnae (em segundos): ' + str(cnae_Tempo_insert))
-
+                df = pd.DataFrame(column_data)
+                
+                # Insere o DataFrame no banco de dados
+                process_and_insert_chunk(df, conexao, 'cnae', table_schema)
+            
+            end_time = time.time()
+            duracao_processo(start_time, end_time)
     except Exception as e:
-        logging.error(f"Erro ao processar os arquivos de CNAE: {e}")
-        print(f"Erro ao processar os arquivos de CNAE: {e}")
+        logging.error(f"Erro ao processar os arquivos de {table_name}: {e}")
+        print(f"Erro ao processar os arquivos de {table_name}: {e}")
         raise
-    processar_arquivos_moti(arquivos['moti'], extracted_files, conexao, cur)
-def processar_arquivos_moti(arquivos_moti):
+def processar_arquivos_moti(arquivos_moti, extracted_files, conexao):
     """Processa os arquivos de motivos da situação atual.
 
     Args:
         arquivos_moti (list): Lista de arquivos de motivos da situação atual.
+        extracted_files (str): Caminho do diretório onde os arquivos foram extraídos.
+        conexao (mysql.connector.connection.MySQLConnection): Conexão com o banco de dados.
     """
     try:
-        logging.info(f"Processar arquivos de motivos da situação atual")
+        start_time = time.time()
+        table_name = 'moti'
+        table_schema = """
+        CREATE TABLE moti (
+            motivo_situacao_cadastral VARCHAR(2),
+            descricao_motivo VARCHAR(255)
+            )
+        """
+        cursor = conexao.cursor()
+        # Drop table antes do insert
+        cursor.execute('DROP TABLE IF EXISTS moti;')
+        conexao.commit()
+        column_names = ['motivo_situacao_cadastral', 'descricao_motivo']
         for e in range(0, len(arquivos_moti)):
             print('Trabalhando no arquivo: '+arquivos_moti[e]+' [...]')
             logging.info(f"Trabalhando no arquivo: {arquivos_moti[e]} [...]")
-            column_data = {name: [] for name in column_names}
-            num_particoes = 10
-            divisoes = np.linspace(0, 10000, num=num_particoes + 1).tolist()
-            # Reparticionar em 10 partições
-
             extracted_file_path = os.path.join(extracted_files, arquivos_moti[e])
-            moti = dd.read_csv(extracted_file_path,
-                                sep=';',
-                                # nrows=100,
-                                skiprows=0,
-                                header=None,
-                                dtype='object',
-                                encoding='latin1')
-            # Renomear colunas
-            moti.columns = column_names
+            column_data = {name: [] for name in column_names}
+            with open(extracted_file_path, 'r', encoding='latin1') as f:
+                reader = csv.reader(f,delimiter=';')
+                for row in reader:
+                    for i, col in enumerate(column_names):
+                        column_data[col].append(row[i])
 
-            # Tratamento do arquivo antes de inserir na base:
-            moti = moti.reset_index()
-            del moti['index']
-
-            # Gravar dados no banco:
-            # moti
-            for i in range(moti.npartitions):
-                df_chunk = moti.get_partition(i)
-                process_and_insert_chunk(df_chunk, conexao,'moti')
-
-            try:
-                del moti
-            except:
-                pass
-            print('Arquivos de moti finalizados!')
-            moti_insert_end = time.time()
-            moti_Tempo_insert = round((moti_insert_end - moti_insert_start))
-            print('Tempo de execução do processo de motivos da situação atual (em segundos): ' +
-                str(moti_Tempo_insert))
+                df = pd.DataFrame(column_data)
+                
+                # Insere o DataFrame no banco de dados
+                process_and_insert_chunk(df, conexao, 'moti', table_schema)
+            
+            end_time = time.time()
+            duracao_processo(start_time, end_time)      
 
     except Exception as e:
         logging.error(f"Erro ao processar os arquivos de motivos da situação atual: {e}")
         print(f"Erro ao processar os arquivos de motivos da situação atual: {e}")
         raise
-def processar_arquivos_munic(arquivos_munic):
+def processar_arquivos_munic(arquivos_munic, extracted_files, conexao):
     """Processa os arquivos de municípios.
 
     Args:
         arquivos_munic (list): Lista de arquivos de municípios.
+        extracted_files (str): Caminho do diretório onde os arquivos foram extraídos.
+        conexao (mysql.connector.connection.MySQLConnection): Conexão com o banco de dados.
     """
     try:
-        logging.info(f"Processar arquivos de municípios")
+        start_time = time.time()
+        table_name = 'munic'
+        table_schema = """
+        CREATE TABLE munic (
+            codigo_municipio VARCHAR(7),
+            descricao_municipio VARCHAR(255)
+            )
+        """            
+
+        cursor = conexao.cursor()
+        # Drop table antes do insert
+        cursor.execute('DROP TABLE IF EXISTS munic;')
+        conexao.commit()
+        column_names = ['codigo_municipio', 'descricao_municipio']
         for e in range(0, len(arquivos_munic)):
             print('Trabalhando no arquivo: '+arquivos_munic[e]+' [...]')
             logging.info(f"Trabalhando no arquivo: {arquivos_munic[e]} [...]")
-            column_data = {name: [] for name in column_names}
-            num_particoes = 10
-            divisoes = np.linspace(0, 10000, num=num_particoes + 1).tolist()
-            # Reparticionar em 10 partições
-
             extracted_file_path = os.path.join(extracted_files, arquivos_munic[e])
-            munic = dd.read_csv(extracted_file_path,
-                                sep=';',
-                                # nrows=100,
-                                skiprows=0,
-                                header=None,
-                                dtype='object',
-                                encoding='latin1')
-            # Renomear colunas
-            munic.columns = column_names
+            column_data = {name: [] for name in column_names}
+            with open(extracted_file_path, 'r', encoding='latin1') as f:
+                reader = csv.reader(f,delimiter=';')
+                for row in reader:
+                    for i, col in enumerate(column_names):
+                        column_data[col].append(row[i])
 
-            # Tratamento do arquivo antes de inserir na base:
-            munic = munic.reset_index()
-            del munic['index']
-
-            # Gravar dados no banco:
-            # munic
-            for i in range(munic.npartitions):
-                df_chunk = munic.get_partition(i)
-                process_and_insert_chunk(df_chunk, conexao,'munic')
-
-            try:
-                del munic
-            except:
-                pass
-            print('Arquivos de munic finalizados!')
-            munic_insert_end = time.time()
-            munic_Tempo_insert = round((munic_insert_end - munic_insert_start))
-            print('Tempo de execução do processo de municípios (em segundos): ' +
-                str(munic_Tempo_insert))
+                df = pd.DataFrame(column_data)
+                
+                # Insere o DataFrame no banco de dados
+                process_and_insert_chunk(df, conexao, 'munic', table_schema)
+            
+            end_time = time.time()
+            duracao_processo(start_time, end_time)
 
     except Exception as e:
         logging.error(f"Erro ao processar os arquivos de municípios: {e}")
         print(f"Erro ao processar os arquivos de municípios: {e}")
         raise
-    processar_arquivos_natju(arquivos['natju'], extracted_files, conexao, cur)
-def processar_arquivos_natju(arquivos_natju):
+def processar_arquivos_natju(arquivos_natju, extracted_files, conexao):
     """Processa os arquivos de natureza jurídica.
 
     Args:
         arquivos_natju (list): Lista de arquivos de natureza jurídica.
+        extracted_files (str): Caminho do diretório onde os arquivos foram extraídos.
+        conexao (mysql.connector.connection.MySQLConnection): Conexão com o banco de dados.
     """
     try:
-        logging.info(f"Processar arquivos de natureza jurídica")
+        start_time = time.time()
+        table_name = 'natju'
+        table_schema = """
+        CREATE TABLE natju (
+            codigo_natureza_juridica VARCHAR(3),
+            descricao_natureza_juridica VARCHAR(255)
+            )
+        """
+       
+        num_particoes = 10
+        cursor = conexao.cursor()
+        # Drop table antes do insert
+        cursor.execute('DROP TABLE IF EXISTS natju;')
+        conexao.commit()
+        column_names = ['codigo_natureza_juridica', 'descricao_natureza_juridica']
         for e in range(0, len(arquivos_natju)):
             print('Trabalhando no arquivo: '+arquivos_natju[e]+' [...]')
             logging.info(f"Trabalhando no arquivo: {arquivos_natju[e]} [...]")
-            column_data = {name: [] for name in column_names}
-            num_particoes = 10
-            divisoes = np.linspace(0, 10000, num=num_particoes + 1).tolist()
-            # Reparticionar em 10 partições
-
             extracted_file_path = os.path.join(extracted_files, arquivos_natju[e])
-            natju = dd.read_csv(extracted_file_path,
-                                sep=';',
-                                # nrows=100,
-                                skiprows=0,
-                                header=None,
-                                dtype='object',
-                                encoding='latin1')
-            # Renomear colunas
-            natju.columns = column_names
-            # Tratamento do arquivo antes de inserir na base:
-            natju = natju.reset_index()
-            del natju['index']
+            column_data = {name: [] for name in column_names}
+            with open(extracted_file_path, 'r', encoding='latin1') as f:
+                reader = csv.reader(f,delimiter=';')
+                for row in reader:
+                    for i, col in enumerate(column_names):
+                        column_data[col].append(row[i])
 
-            # Gravar dados no banco:
-            # natju
-            for i in range(natju.npartitions):
-                df_chunk = natju.get_partition(i)
-                process_and_insert_chunk(df_chunk, conexao,'natju')
-
-            print('Arquivos de natju finalizados!')
-            natju_insert_end = time.time()
-            natju_Tempo_insert = round((natju_insert_end - natju_insert_start))
-            print('Tempo de execução do processo de natureza jurídica (em segundos): ' +
-                str(natju_Tempo_insert))
+                df = pd.DataFrame(column_data)
+                
+                # Insere o DataFrame no banco de dados
+                process_and_insert_chunk(df, conexao, 'natju', table_schema)
+            
+            end_time = time.time()
+            duracao_processo(start_time, end_time)
 
     except Exception as e:
         logging.error(f"Erro ao processar os arquivos de natureza jurídica: {e}")
         print(f"Erro ao processar os arquivos de natureza jurídica: {e}")
         raise
-    processar_arquivos_pais(arquivos['pais'], extracted_files, conexao, cur)
-def processar_arquivos_pais(arquivos_pais):
+def processar_arquivos_pais(arquivos_pais, extracted_files, conexao):
     """Processa os arquivos de país.
 
     Args:
         arquivos_pais (list): Lista de arquivos de país.
+        extracted_files (str): Caminho do diretório onde os arquivos foram extraídos.
+        conexao (mysql.connector.connection.MySQLConnection): Conexão com o banco de dados.
     """
     try:
-        logging.info(f"Processar arquivos de país")
+        start_time = time.time()
+        table_name = 'pais'
+        table_schema = """
+        CREATE TABLE pais (
+            codigo_pais VARCHAR(5),
+            descricao_pais VARCHAR(50)
+            )
+            """
+       
+        num_particoes = 10
+        cursor = conexao.cursor()
+        # Drop table antes do insert
+        cursor.execute('DROP TABLE IF EXISTS pais;')
+        conexao.commit()
+        column_names = ['cnpj_basico', 'razao_social', 'natureza_juridica', 'qualificacao_responsavel', 'capital_social', 'porte_empresa', 'ente_federativo_responsavel']
+        logging.info(f"Processar arquivos de {table_name}")
         for e in range(0, len(arquivos_pais)):
             print('Trabalhando no arquivo: '+arquivos_pais[e]+' [...]')
             logging.info(f"Trabalhando no arquivo: {arquivos_pais[e]} [...]")
-            column_data = {name: [] for name in column_names}
-            num_particoes = 10
-            divisoes = np.linspace(0, 10000, num=num_particoes + 1).tolist()
-            # Reparticionar em 10 partições
-
             extracted_file_path = os.path.join(extracted_files, arquivos_pais[e])
-            pais = dd.read_csv(extracted_file_path, 
-                                sep=';',
-                                skiprows=0, 
-                                header=None, 
-                                dtype='object', 
-                                encoding='latin1')
-            # Renomear colunas
-            pais.columns = column_names
-            # Tratamento do arquivo antes de inserir na base:
-            pais = pais.reset_index()
-            del pais['index']
+            column_data = {name: [] for name in column_names}
+            with open(extracted_file_path, 'r', encoding='latin1') as f:
+                reader = csv.reader(f,delimiter=';')
+                for row in reader:
+                    for i, col in enumerate(column_names):
+                        column_data[col].append(row[i])
 
-            # Gravar dados no banco:
-            # pais
-            for i in range(pais.npartitions):
-                df_chunk = pais.get_partition(i)
-                process_and_insert_chunk(df_chunk, conexao,'pais')
-
-            try:
-                del pais
-            except:
-                pass
-            print('Arquivos de pais finalizados!')
-            pais_insert_end = time.time()
-            pais_Tempo_insert = round((pais_insert_end - pais_insert_start))
-            print('Tempo de execução do processo de país (em segundos): ' + str(pais_Tempo_insert))
+                df = pd.DataFrame(column_data)
+                
+                # Insere o DataFrame no banco de dados
+                process_and_insert_chunk(df, conexao, 'pais', table_schema)
+            
+            end_time = time.time()
+            duracao_processo(start_time, end_time)
 
     except Exception as e:
         logging.error(f"Erro ao processar os arquivos de país: {e}")
         print(f"Erro ao processar os arquivos de país: {e}")
         raise
-def processar_arquivos_qual(arquivos_qual):
+def processar_arquivos_qual(arquivos_qual, extracted_files, conexao):
     """Processa os arquivos de qualificação de sócios.
 
     Args:
         arquivos_qual (list): Lista de arquivos de qualificação de sócios.
+        extracted_files (str): Caminho do diretório onde os arquivos foram extraídos.
+        conexao (mysql.connector.connection.MySQLConnection): Conexão com o banco de dados.
     """
     try:
+        start_time = time.time()
+        table_name = 'qual'
+        table_schema = """
+        create table qual (
+            codigo_pais varchar(5),
+            descricao_pais varchar(50)
+            )
+        """       
+        num_particoes = 10
+        cursor = conexao.cursor()
+        # Drop table antes do insert
+        cursor.execute('DROP TABLE IF EXISTS qual;')
+        conexao.commit()
+        column_names = ['codigo_pais', 'descricao_pais']
         logging.info(f"Processar arquivos de qualificação de sócios")
         for e in range(0, len(arquivos_qual)):
             print('Trabalhando no arquivo: '+arquivos_qual[e]+' [...]')
             logging.info(f"Trabalhando no arquivo: {arquivos_qual[e]} [...]")
-            column_data = {name: [] for name in column_names}
-            num_particoes = 10
-            divisoes = np.linspace(0, 10000, num=num_particoes + 1).tolist()
-            # Reparticionar em 10 partições
-
             extracted_file_path = os.path.join(extracted_files, arquivos_qual[e])
-            qual = dd.read_csv(extracted_file_path, 
-                                sep=';',
-                                skiprows=0, 
-                                header=None, 
-                                dtype='object', 
-                                encoding='latin1')
-            # Renomear colunas
-            qual.columns = column_names
-            # Tratamento do arquivo antes de inserir na base:
-            qual = qual.reset_index()
-            del qual['index']
+            column_data = {name: [] for name in column_names}
+            with open(extracted_file_path, 'r', encoding='latin1') as f:
+                reader = csv.reader(f,delimiter=';')
+                for row in reader:
+                    for i, col in enumerate(column_names):
+                        column_data[col].append(row[i])
 
-            # Gravar dados no banco:
-            # qual
-            for i in range(qual.npartitions):
-                df_chunk = qual.get_partition(i)
-                process_and_insert_chunk(df_chunk, conexao,'qual')
-
-            try:
-                del qual
-            except:
-                pass
-            print('Arquivos de qual finalizados!')
-            qual_insert_end = time.time()
-            qual_Tempo_insert = round((qual_insert_end - qual_insert_start))
-            print('Tempo de execução do processo de qualificação de sócios (em segundos): ' + str(qual_Tempo_insert))
+                df = pd.DataFrame(column_data)
+                
+                # Insere o DataFrame no banco de dados
+                process_and_insert_chunk(df, conexao, 'qual', table_schema)
+            
+            end_time = time.time()
+            duracao_processo(start_time, end_time)
 
     except Exception as e:
         logging.error(f"Erro ao processar os arquivos de qualificação de sócios: {e}")
         print(f"Erro ao processar os arquivos de qualificação de sócios: {e}")
         raise
+def process_and_insert_chunk(df_chunk, conexao, table_name, table_schema):
+    """
+        Grava dados no banco de dados.
+
+        Args:
+        df_chunk (pd.DataFrame): DataFrame contendo os dados a serem inseridos.
+        conexao (mysql.connector.connection.MySQLConnection): Conexão com o banco de dados.
+        table_name (str): Nome da tabela no banco de dados.
+        table_schema (str): Esquema SQL para criar a tabela, se necessário.
+    """
+    logging.info(f"Gravar dados no banco {table_name}")
+    cursor = None
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            cursor = conexao.cursor()
+            # Verificar se a tabela existe
+            cursor.execute(f"SHOW TABLES LIKE '{table_name}'")
+            result = cursor.fetchone()
+            if not result:
+                logging.info(f"Tabela {table_name} não existe. Criando tabela.")
+                cursor.execute(table_schema)
+                conexao.commit()
+                logging.info(f"Tabela {table_name} criada com sucesso")
+
+            # Processo para inserir os dados no banco
+            logging.info(f"Processo para inserir os dados no banco {table_name}")
+            # Corrigir os valores decimais
+            df_chunk['capital_social'] = df_chunk['capital_social'].str.replace(',', '.')
+            # Converter o DataFrame para uma lista de tuplas
+            data_tuples = [tuple(x) for x in df_chunk.to_numpy()]
+            # Inserção em massa
+            columns = ', '.join(df_chunk.columns)
+            placeholders = ', '.join(['%s'] * len(df_chunk.columns))
+            insert_query = f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})"
+            cursor.executemany(insert_query, data_tuples)
+            conexao.commit()
+            logging.info(f'Dados inseridos com sucesso na tabela: {table_name}')
+            break
+
+        except mysql.connector.Error as e:
+            logging.error(f"Erro ao inserir dados na tabela {table_name}: {e}")
+            print(f"Erro ao inserir dados na tabela {table_name}: {e}")
+            if attempt < max_retries - 1:
+                logging.info("Tentando reconectar ao banco de dados...")
+                try:
+                    conexao.reconnect(attempts=3, delay=5)
+                    logging.info("Reconexão bem-sucedida.")
+                except mysql.connector.Error as reconnection_error:
+                    logging.error(f"Erro ao reconectar ao banco de dados: {reconnection_error}")
+                    print(f"Erro ao reconectar ao banco de dados: {reconnection_error}")
+            else:
+                logging.error(f"Falha ao inserir dados na tabela {table_name} após {max_retries} tentativas")
+                raise
+        finally:
+            if cursor is not None:
+                cursor.close()
+            logging.info(f"Finalizando processo de inserção de dados na tabela {table_name}")
+
 def listar_arquivos(diretorio):
     """Lista os arquivos de um diretório.
 
@@ -954,22 +991,22 @@ arquivos = separar_arquivos(items)
 
 # Acesso ao banco de dados
 logging.info("Acesso ao banco de dados")
-conexao, cur = connect_to_database()
+conexao = connect_to_database()
 
-if conexao is None or cur is None:
+if conexao is None:
     logging.info("Conexão falhou")
 else:
     # Processar arquivos de empresa
-    processar_arquivos_empresa(arquivos['empresa'], extracted_files, conexao, cur)
-    processar_arquivos_estabelecimento(arquivos['estabelecimento'], extracted_files, conexao, cur)
-    processar_arquivos_socios(arquivos['socios'], extracted_files, conexao, cur)
-    processar_arquivos_simples(arquivos['simples'], extracted_files, conexao, cur)
-    processar_arquivos_cnae(arquivos['cnae'], extracted_files, conexao, cur)
-    processar_arquivos_moti(arquivos['moti'], extracted_files, conexao, cur)
-    processar_arquivos_munic(arquivos['munic'], extracted_files, conexao, cur)
-    processar_arquivos_natju(arquivos['natju'], extracted_files, conexao, cur)
-    processar_arquivos_pais(arquivos['pais'], extracted_files, conexao, cur)
-    processar_arquivos_qual(arquivos['quals'], extracted_files, conexao, cur)
+    processar_arquivos_empresa(arquivos['empresa'], extracted_files, conexao)
+    processar_arquivos_estabelecimento(arquivos['estabelecimento'], extracted_files, conexao)
+    processar_arquivos_socios(arquivos['socios'], extracted_files, conexao)
+    processar_arquivos_simples(arquivos['simples'], extracted_files, conexao)
+    processar_arquivos_cnae(arquivos['cnae'], extracted_files, conexao)
+    processar_arquivos_moti(arquivos['moti'], extracted_files, conexao)
+    processar_arquivos_munic(arquivos['munic'], extracted_files, conexao)
+    processar_arquivos_natju(arquivos['natju'], extracted_files, conexao)
+    processar_arquivos_pais(arquivos['pais'], extracted_files, conexao)
+    processar_arquivos_qual(arquivos['quals'], extracted_files, conexao)
     logging.info(f"Processo de carga dos arquivos finalizado")
     
     insert_end = time.time()
@@ -979,14 +1016,15 @@ else:
     index_start = time.time()
     
     # Criação de índices
-    cur.execute('CREATE INDEX empresa_cnpj ON empresa(cnpj_basico);')
-    cur.execute('conexao.commit;')
-    cur.execute('CREATE INDEX estabelecimento_cnpj ON estabelecimento(cnpj_basico);')
-    cur.execute('conexao.commit;')
-    cur.execute('CREATE INDEX socios_cnpj ON socios(cnpj_basico);')
-    cur.execute('conexao.commit;')
-    cur.execute('CREATE INDEX simples_cnpj ON simples(cnpj_basico);')
-    cur.execute('conexao.commit;')
+    cursor = conexao.cursor()
+    cursor.execute('CREATE INDEX empresa_cnpj ON empresa(cnpj_basico);')
+    cursor.execute('conexao.commit;')
+    cursor.execute('CREATE INDEX estabelecimento_cnpj ON estabelecimento(cnpj_basico);')
+    cursor.execute('conexao.commit;')
+    cursor.execute('CREATE INDEX socios_cnpj ON socios(cnpj_basico);')
+    cursor.execute('conexao.commit;')
+    cursor.execute('CREATE INDEX simples_cnpj ON simples(cnpj_basico);')
+    cursor.execute('conexao.commit;')
     conexao.commit()
     
     index_end = time.time()
