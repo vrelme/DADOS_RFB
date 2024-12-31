@@ -24,7 +24,7 @@ import zipfile
 # Configuração do logging
 logging.basicConfig(filename='DADOS_RFB.log', level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s')
-logging.info(f"Iniciando o processo de carga")
+
 
 def check_diff(url, file_name):
     # Verifica se o arquivo local é idêntico ao arquivo remoto.
@@ -239,7 +239,6 @@ def print_files_list(files):
         logging.error(f"Erro ao imprimir a lista de arquivos: {e}")
 
 
-
 def bar_progress(current, total, width=80):
     messagem = "Executando: %d%% [%d / %d] bytes - " % (
         (current * 100)/total, current, total)
@@ -275,7 +274,6 @@ def download_files(Files, base_url, output_files):
 
     except Exception as e:
         logging.error(f"Erro ao baixar os arquivos: {e}")
-
 
 
 def extract_files(Files, output_files, extracted_files):
@@ -373,9 +371,12 @@ def connect_to_database(max_retries=3, delay=5):
                 database=os.getenv('db_name'),
                 use_pure=True
             )
-            logging.info("Conexão com o banco de dados estabelecida com sucesso")
-            logging.info(f"Versão do banco de dados: {conexao.get_server_info()}")  
-            logging.info(f"Conexão ao banco de dados: {conexao.is_connected()}")
+            logging.info(
+                "Conexão com o banco de dados estabelecida com sucesso")
+            logging.info(f"Versão do banco de dados: {
+                         conexao.get_server_info()}")
+            logging.info(f"Conexão ao banco de dados: {
+                         conexao.is_connected()}")
             logging.info(f"Host: {conexao.server_host}")
             logging.info(f"Database: {conexao.database}")
             logging.info(f"User: {conexao.user}")
@@ -443,22 +444,28 @@ def process_and_insert_chunk(data, conexao, table_name, table_schema, column_nam
             current_db = cursor.fetchone()[0]
             logging.info(f"Conectado ao banco de dados: {current_db}")
             cursor.execute(f"SHOW TABLES LIKE '{table_name}'")
-            logging.info(f"Verificar se a tabela {table_name} existe no banco de dados {current_db} se sim apagamos a tabela")
+            logging.info(f"Verificar se a tabela {table_name} existe no banco de dados {
+                         current_db} se sim apagamos a tabela")
             result = cursor.fetchone()
             if result is None:
-                logging.info(f"Tabela {table_name} não existe no banco de dados {current_db}. Criando tabela.")
+                logging.info(f"Tabela {table_name} não existe no banco de dados {
+                             current_db}. Criando tabela.")
                 cursor.execute(table_schema)
                 conexao.commit()
-                logging.info(f"Tabela {table_name} criada com sucesso no banco de dados {current_db}")
+                logging.info(
+                    f"Tabela {table_name} criada com sucesso no banco de dados {current_db}")
                 # Verificar novamente se a tabela foi criada
                 cursor.execute(f"SHOW TABLES LIKE '{table_name}'")
                 result = cursor.fetchone()
                 if result is None:
-                    logging.error(f"Falha ao criar a tabela {table_name} no banco de dados {current_db}")
-                    raise Exception(f"Falha ao criar a tabela {table_name} no banco de dados {current_db}")
+                    logging.error(f"Falha ao criar a tabela {
+                                  table_name} no banco de dados {current_db}")
+                    raise Exception(f"Falha ao criar a tabela {
+                                    table_name} no banco de dados {current_db}")
 
             # Processo para inserir os dados no banco
-            logging.info(f"Processo para inserir os dados no banco {table_name}")
+            logging.info(
+                f"Processo para inserir os dados no banco {table_name}")
             # Corrigir os valores decimais e inteiros
             for i, row in enumerate(data):
                 row = list(row)
@@ -466,7 +473,7 @@ def process_and_insert_chunk(data, conexao, table_name, table_schema, column_nam
                     if column_names[j] == 'capital_social':
                         row[j] = value.replace(',', '.')
                     elif column_names[j] in ['porte_empresa']:
-                        row[j] = value.replace('', '05')    
+                        row[j] = value.replace('', '05')
                     elif column_names[j] in ['natureza_juridica', 'qualificacao_responsavel', 'identificador_matriz_filial', 'situacao_cadastral', 'motivo_situacao_cadastral', 'cnae_fiscal_principal', 'municipio', 'ddd_1', 'ddd_2', 'dd_fax', 'qualificacao_socio', 'pais', 'qualificacao_representante_legal', 'faixa_etaria']:
                         row[j] = int(value) if value.isdigit() else None
                 data[i] = tuple(row)
@@ -474,17 +481,19 @@ def process_and_insert_chunk(data, conexao, table_name, table_schema, column_nam
             # Inserção em massa
             columns = ', '.join(column_names)
             placeholders = ', '.join(['%s'] * len(column_names))
-            insert_query = f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})"
+            insert_query = f"INSERT INTO {
+                table_name} ({columns}) VALUES ({placeholders})"
 
             for i in range(0, len(data), batch_size):
                 batch = data[i:i + batch_size]
                 cursor.executemany(insert_query, batch)
                 conexao.commit()
-                logging.info(f'Lote de {len(batch)} registros inserido com sucesso na tabela: {table_name}')
+                logging.info(
+                    f'Lote de {len(batch)} registros inserido com sucesso na tabela: {table_name}')
             break
         except OperationalError as e:
-            logging.error(f"Erro operacional ao inserir dados na tabela {table_name}: {e}")
-
+            logging.error(f"Erro operacional ao inserir dados na tabela {
+                          table_name}: {e}")
 
             if attempt < max_retries - 1:
                 logging.info("Tentando reconectar ao banco de dados...")
@@ -492,10 +501,12 @@ def process_and_insert_chunk(data, conexao, table_name, table_schema, column_nam
                     conexao.reconnect(attempts=3, delay=5)
                     logging.info("Reconexão bem-sucedida.")
                 except OperationalError as reconnection_error:
-                    logging.error(f"Erro ao reconectar ao banco de dados: {reconnection_error}")
+                    logging.error(f"Erro ao reconectar ao banco de dados: {
+                                  reconnection_error}")
 
             else:
-                logging.error(f"Falha ao inserir dados na tabela {table_name} após {max_retries} tentativas")
+                logging.error(f"Falha ao inserir dados na tabela {
+                              table_name} após {max_retries} tentativas")
                 raise
         except mysql.connector.Error as e:
             logging.error(f"Erro ao inserir dados na tabela {table_name}: {e}")
@@ -504,7 +515,8 @@ def process_and_insert_chunk(data, conexao, table_name, table_schema, column_nam
         finally:
             if cursor is not None:
                 cursor.close()
-            logging.info(f"Finalizando processo de inserção de dados na tabela {table_name}")
+            logging.info(
+                f"Finalizando processo de inserção de dados na tabela {table_name}")
 
 
 def processar_arquivos(arquivos, extracted_files, conexao, table_name, table_schema, column_names):
@@ -747,27 +759,29 @@ else:
     }
 
 for tabela, info in tabelas.items():
-    processar_arquivos(arquivos[tabela], extracted_files,conexao, tabela, info['schema'], info['columns'])
+    processar_arquivos(arquivos[tabela], extracted_files,
+                       conexao, tabela, info['schema'], info['columns'])
     logging.info(f"Processo de carga dos arquivos finalizado")
     insert_end = time.time()
     Tempo_insert = round(insert_end - insert_start)
-    logging.info(f"Tempo total de execução do processo de carga (em segundos): {Tempo_insert}")
+    logging.info(f"Tempo total de execução do processo de carga (em segundos): {
+                 Tempo_insert}")
     index_start = time.time()
 
  # Criação de índices
 indices = [
-        'CREATE INDEX empresa_cnpj ON empresa(cnpj_basico);',
-        'CREATE INDEX estabelecimento_cnpj ON estabelecimento(cnpj_basico);',
-        'CREATE INDEX socios_cnpj ON socios(cnpj_basico);',
-        'CREATE INDEX simples_cnpj ON simples(cnpj_basico);'
-    ]
+    'CREATE INDEX empresa_cnpj ON empresa(cnpj_basico);',
+    'CREATE INDEX estabelecimento_cnpj ON estabelecimento(cnpj_basico);',
+    'CREATE INDEX socios_cnpj ON socios(cnpj_basico);',
+    'CREATE INDEX simples_cnpj ON simples(cnpj_basico);'
+]
 criar_indices(conexao, indices)
 
 index_end = time.time()
 index_time = round(index_end - index_start)
 logging.info(f"Tempo para criar os índices (em segundos): {index_time}")
 logging.info(f"Processo 100% finalizado! Você já pode usar seus dados no BD!")
-        # %%
+# %%
 """Processo 100% finalizado! Você já pode usar seus dados no BD!
      - Desenvolvido por: Aphonso Henrique do Amaral Rafael
      - Adaptado por: Vander Ribeiro Elme
