@@ -25,7 +25,6 @@ import zipfile
 logging.basicConfig(filename='DADOS_RFB.log', level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s')
 
-
 def check_diff(url, file_name):
     # Verifica se o arquivo local é idêntico ao arquivo remoto.
     #
@@ -76,7 +75,6 @@ def check_diff(url, file_name):
         logging.error(f"Erro ao acessar o arquivo local: {e}")
         return True
 
-
 def create_dataframe(data, columns):
     """Cria um DataFrame a partir dos dados e colunas fornecidos.
 
@@ -90,7 +88,6 @@ def create_dataframe(data, columns):
     logging.info(f"Criar DataFrame")
     df = dd.DataFrame(data, columns=columns)
     return df
-
 
 def makedirs_custom(path, exist_ok=True, mode=0o755):
     """Cria diretórios recursivamente com controle de existência e permissões.
@@ -112,7 +109,6 @@ def makedirs_custom(path, exist_ok=True, mode=0o755):
         logging.error(f"Erro ao criar diretório {path}: {e}")
         return False
 
-
 def getEnv(env):
     """
     Retorna o valor de uma variável de ambiente.
@@ -125,7 +121,6 @@ def getEnv(env):
     """
     logging.info(f"Retornar valor da variável de ambiente {env}")
     return os.getenv(env)
-
 
 def load_enviroment(local_env):
     """Carrega as variáveis de ambiente de um arquivo .env.
@@ -140,7 +135,6 @@ def load_enviroment(local_env):
     dotenv_path = os.path.join(local_env, '.env')
     load_dotenv(dotenv_path=dotenv_path)
     logging.info(f"Variáveis de ambiente carregadas {dotenv_path}")
-
 
 def define_directories():
     """Define os diretórios de saída e extração dos arquivos.
@@ -163,7 +157,6 @@ def define_directories():
             f"Erro na definição dos diretórios, verifique o arquivo '.env' ou o local informado do seu arquivo de configuração: {e}")
         raise
 
-
 def fetch_data(url):
     """Obtém os dados de uma URL.
 
@@ -181,7 +174,6 @@ def fetch_data(url):
     except Exception as e:
         logging.error(f"Erro ao obter dados da URL {url}: {e}")
         raise
-
 
 def extract_files_from_html(html_str, file_extension='.zip'):
     """Extrai os arquivos de uma string HTML.
@@ -209,7 +201,6 @@ def extract_files_from_html(html_str, file_extension='.zip'):
         logging.error(f"Erro ao extrair arquivos da string HTML: {e}")
         raise
 
-
 def delete_files_variable():
     """Deleta a variável Files.
 
@@ -224,7 +215,6 @@ def delete_files_variable():
         logging.error(f"Erro ao deletar a variável Files: {e}")
         return False
 
-
 def print_files_list(files):
     """Imprime a lista de arquivos.
 
@@ -238,14 +228,12 @@ def print_files_list(files):
     except Exception as e:
         logging.error(f"Erro ao imprimir a lista de arquivos: {e}")
 
-
 def bar_progress(current, total, width=80):
     messagem = "Executando: %d%% [%d / %d] bytes - " % (
         (current * 100)/total, current, total)
     # Don't use print() as it will print in new line every time.
     sys.stdout.write("\r" + messagem)
     sys.stdout.flush()
-
 
 def download_files(Files, base_url, output_files):
     """Baixa os arquivos de uma lista.
@@ -275,7 +263,6 @@ def download_files(Files, base_url, output_files):
     except Exception as e:
         logging.error(f"Erro ao baixar os arquivos: {e}")
 
-
 def extract_files(Files, output_files, extracted_files):
     """Descompacta os arquivos de uma lista.
 
@@ -297,7 +284,6 @@ def extract_files(Files, output_files, extracted_files):
             logging.error(f"Erro ao descompactar os arquivos: {e}")
 
     logging.info(f"Fim descompactando arquivo")
-
 
 def separar_arquivos(items):
     """Separa os arquivos em listas de acordo com o nome.
@@ -349,7 +335,6 @@ def separar_arquivos(items):
 
         raise
 
-
 def connect_to_database(max_retries=3, delay=5):
     """Conecta ao banco de dados com tentativas de reconexão.
 
@@ -394,12 +379,10 @@ def connect_to_database(max_retries=3, delay=5):
             else:
                 raise
 
-
 def ensure_connection(conexao):
     """Garante que a conexão com o banco de dados esteja ativa."""
     if not conexao.is_connected():
         conexao.reconnect(attempts=3, delay=5)
-
 
 def duracao_processo(start_time, end_time):
     """Calcula a duração do processo.
@@ -418,7 +401,6 @@ def duracao_processo(start_time, end_time):
         logging.error(f"Erro ao calcular a duração do processo: {e}")
 
         raise
-
 
 def process_and_insert_chunk(data, conexao, table_name, table_schema, column_names, batch_size=10000):
     """
@@ -484,6 +466,7 @@ def process_and_insert_chunk(data, conexao, table_name, table_schema, column_nam
 
             for i in range(0, len(data), batch_size):
                 batch = data[i:i + batch_size]
+                logging.info(f"Inserindo lote de {len(batch)} registros na tabela {table_name}")
                 cursor.executemany(insert_query, batch)
                 conexao.commit()
                 logging.info(f'Lote de {len(batch)} registros inserido com sucesso na tabela: {table_name}')
@@ -510,7 +493,6 @@ def process_and_insert_chunk(data, conexao, table_name, table_schema, column_nam
             if cursor is not None:
                 cursor.close()
             logging.info(f"Finalizando processo de inserção de dados na tabela {table_name}")
-
 
 def processar_arquivos(arquivos, extracted_files, conexao, table_name, table_schema, column_names):
     """Processa os arquivos e insere os dados no banco de dados.
@@ -592,8 +574,6 @@ def criar_indices(conexao, indices):
         if cursor is not None:
             cursor.close()
 
-
-
 logging.info(f"Iniciando o processo de carga")
 # Definir diretórios
 local_env = 'D:\\Repositorio\\00-Programacao\\06-DADOS_RFB\\DADOS_RFB\\code'
@@ -647,7 +627,7 @@ else:
                 capital_social DECIMAL(15, 2),
                 porte_empresa INT,
                 ente_federativo_responsavel VARCHAR(255)
-            )""",
+            )""".replace('\n                ', ' '),
             'columns': ['cnpj_basico', 'razao_social', 'natureza_juridica', 'qualificacao_responsavel', 'capital_social', 'porte_empresa', 'ente_federativo_responsavel']
         },
         'estabelecimento': {
@@ -664,7 +644,7 @@ else:
                 pais VARCHAR(255),
                 data_inicio_atividade DATE,
                 cnae_fiscal_principal INT,
-                cnae_fiscal_secundaria VARCHAR(255),
+                cnae_fiscal_secundaria VARCHAR(1000),
                 tipo_logradouro VARCHAR(255),
                 logradouro VARCHAR(255),
                 numero VARCHAR(10),
@@ -682,7 +662,7 @@ else:
                 correio_eletronico VARCHAR(255),
                 situacao_especial VARCHAR(255),
                 data_situacao_especial DATE
-            )""",
+            )""".replace('\n                ', ' '),
             'columns': ['cnpj_basico', 'cnpj_ordem', 'cnpj_dv', 'identificador_matriz_filial', 'nome_fantasia', 'situacao_cadastral', 'data_situacao_cadastral', 'motivo_situacao_cadastral', 'nome_cidade_exterior', 'pais', 'data_inicio_atividade', 'cnae_fiscal_principal', 'cnae_fiscal_secundaria', 'tipo_logradouro', 'logradouro', 'numero', 'complemento', 'bairro', 'cep', 'uf', 'municipio', 'ddd_1', 'telefone_1', 'ddd_2', 'telefone_2', 'dd_fax', 'fax', 'correio_eletronico', 'situacao_especial', 'data_situacao_especial']
         },
         'simples': {
@@ -694,7 +674,7 @@ else:
                 opcao_mei VARCHAR(3),
                 data_opcao_mei DATE,
                 data_exclusao_mei DATE
-            )""",
+            )""".replace('\n                ', ' '),
             'columns': ['cnpj_basico', 'opcao_simples', 'data_opcao_simples', 'data_exclusao_simples', 'opcao_mei', 'data_opcao_mei', 'data_exclusao_mei']
         },
         'socios': {
@@ -710,42 +690,42 @@ else:
                 nome_do_representante VARCHAR(255),
                 qualificacao_representante_legal INT,
                 faixa_etaria INT
-            )""",
+            )""".replace('\n                ', ' '),
             'columns': ['cnpj_basico', 'identificador_socio', 'nome_socio_razao_social', 'cpf_cnpj_socio', 'qualificacao_socio', 'data_entrada_sociedade', 'pais', 'representante_legal', 'nome_do_representante', 'qualificacao_representante_legal', 'faixa_etaria']
         },
         'pais': {
             'schema': """CREATE TABLE pais (
                 codigo INT,
                 nome VARCHAR(255)
-            )""",
+            )""".replace('\n                ', ' '),
             'columns': ['codigo', 'nome']
         },
         'munic': {
             'schema': """CREATE TABLE munic (
                 codigo INT,
                 nome VARCHAR(255)
-            )""",
+            )""".replace('\n                ', ' '),
             'columns': ['codigo', 'nome']
         },
         'quals': {
             'schema': """CREATE TABLE quals (
                 codigo INT,
                 nome VARCHAR(255)
-            )""",
+            )""".replace('\n                ', ' '),
             'columns': ['codigo', 'nome']
         },
         'natju': {
             'schema': """CREATE TABLE natju (
                 codigo INT,
                 nome VARCHAR(255)
-            )""",
+            )""".replace('\n                ', ' '),
             'columns': ['codigo', 'nome']
         },
         'cnae': {
             'schema': """CREATE TABLE cnae (
                 codigo INT,
                 nome VARCHAR(255)
-            )""",
+            )""".replace('\n                ', ' '),
             'columns': ['codigo', 'nome']
         }
     }
