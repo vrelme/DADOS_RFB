@@ -25,6 +25,7 @@ import pandas as pd
 import dask.dataframe as dd
 from dask.diagnostics import ProgressBar
 import wget
+import numpy as np
 
 class Config:
     """Configurações da aplicação."""
@@ -56,11 +57,16 @@ class DatabaseManager:
                     user=os.getenv('DB_USER'),
                     password=os.getenv('DB_PASSWORD'),
                     database=os.getenv('DB_NAME'),
-                    use_pure=True, auth_plugin='mysql_native_password'
+                    use_pure=True, 
+                    auth_plugin='mysql_native_password',
+                    charset='utf8mb4',
+                    collation='utf8mb4_unicode_ci',
+                    raise_on_warnings=True,
+                    connection_timeout=30
                 )
 
                 logging.info("Conexão com o banco de dados estabelecida com sucesso")
-                logging.info("Versão do banco: %s",self.connection.get_server_info())
+                logging.info("Versão do banco: %s",self.connection.server_info)
                 return self.connection
         
             except mysql_errors.Error as e:
@@ -447,17 +453,41 @@ class RFBDataLoader:
         cursor = None
         try:
             cursor = conexao.cursor()
+            db_name = os.getenv('DB_NAME')
+
+            # Garantir que estamos usando o banco de dados correto
+            cursor.execute(f"USE {db_name}")
+
+             # Nome completo da tabela
+            full_table_name = f"{db_name}.{table_name}"
+
+            # Verificar se a tabela existe
+            cursor.execute(f"""
+                SELECT COUNT(*)
+                FROM information_schema.tables
+                WHERE table_schema = '{db_name}'
+                AND table_name = '{table_name}'
+            """)
+
+            table_exists = cursor.fetchone()[0] > 0
+
+            if table_exists:
+                # Se existir, fazer drop
+                logging.info(f"Removendo tabela existente {full_table_name}...")
+                cursor.execute(f'DROP TABLE IF EXISTS {full_table_name}')
 
             # Drop e criação da tabela
-            cursor.execute(f'DROP TABLE IF EXISTS {table_name}')
-            cursor.execute(table_definition['schema'])
+            logging.info(f"Criando tabela {full_table_name}...")
+            cursor.execute(table_definition['schema'])  
             conexao.commit()
 
+            # Processar arquivos
             for filename in file_list:
                 file_path = self.extract_dir / filename
                 logging.info("Processando arquivo: %s", filename)
 
-                self.process_single_file(conexao, table_name, file_path, table_definition['columns'])
+                self.process_single_file(conexao, full_table_name, file_path, 
+                                         table_definition['columns'])
         except mysql_errors.Error as e:
             logging.error("Erro ao processar tabela %s: %s", table_name, e)
             raise
@@ -477,13 +507,49 @@ class RFBDataLoader:
             chunk_size = 50000
             total_rows = 0
 
-            for chunk in pd.read_csv(file_path, sep=';', encoding='latin1', dtype=dtype_dict, 
-                                     chunksize=chunk_size, low_memory=False):
+            for chunk in pd.read_csv(file_path,
+                                    sep=';', 
+                                    encoding='latin1', 
+                                    names=column_names,
+                                    header=None,
+                                    dtype=dtype_dict,
+                                    chunksize=chunk_size, 
+                                    low_memory=False
+                            ):
                 # Aplicar transformações 
                 chunk = self.apply_data_transformations(chunk, column_names)
 
+                # Substituir NaN por None para compatibilidade com MySQL
+                chunk = chunk.where(pd.notnull(chunk), None)
+                def to_native(value):
+                    if value is None:
+                        return None
+                    # pandas  Timestamp / numpy datetime64 -> python datetime
+                    if isinstance(value, (pd.Timestamp, np.datetime64)):
+                        try:
+                            return pd.Timestamp(value).to_pydatetime()
+                        except Exception:
+                            return str(value)
+                    if isinstance(value, (np.integer,)):
+                        return int(value) 
+                    if isinstance(value, (np.floating,)):
+                        return float(value)
+                    if isinstance(value, (np.bool_, bool)):
+                        return bool(value)
+                    if isinstance(value, (bytes, bytearray)):
+                        try:
+                            return value.decode('utf-8')
+                        except Exception:
+                            return str(value)
+                    # catch-all para outros tipos
+                    if isinstance(value, np.generic):
+                        return value.item()
+                    return value
+
                 # Converter para lista de tuplas para inserção
-                data = [tuple(row) for row in chunk.itertuples(index=False)]
+                data = []
+                for row in chunk.itertuples(index=False, name=None):
+                    data.append(tuple(to_native(v) for v in row))
 
                 # Inserir dados no banco
                 self.batch_insert_data(conexao, table_name, data, column_names)
@@ -510,15 +576,25 @@ class RFBDataLoader:
     def apply_data_transformations(self, df:pd.DataFrame, column_names:List[str]) -> pd.DataFrame:
         """Aplica transformações nos Dados.""" 
         for col in column_names:
-            if col in ['capital_social']:
-                df[col] = pd.to_numeric(df[col].str.replace(',','.'), errors='coerce')
-            elif any(keyword in col for keyword in ['data', 'date']):
-                df[col] = pd.to_datetime(df[col], format='%Y%m%d', errors='coerce')
-            elif col in ['natureza_juridica', 'qualificacao_responsavel',
-                         'qualificacao_responsavel', 
+            # Verifica se a coluna existe no DataFrame
+            if col not in df.columns:
+                logging.warning(f"Coluna {col} não encontrada no DataFrame")
+                continue
+
+            try:
+                if col in ['capital_social']:
+                    # Substituir vírgulas por pontos e converter para numérico
+                    df[col] = df[col].apply(lambda x: str(x).replace(',','.') if pd.notna(x) else None)
+                    df[col] = pd.to_numeric(df[col], errors='coerce')
+                elif any(keyword in col for keyword in ['data', 'date']):
+                    df[col] = pd.to_datetime(df[col], format='%Y%m%d', errors='coerce')
+                elif col in ['natureza_juridica', 'qualificacao_responsavel',
                          'identificador_matriz_filial',
                          'situacao_cadastral']:
-                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype('Int64')
+                    df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype('Int64')
+            except Exception as e:
+                logging.error(f"Erro ao transformar coluna %s: %s", col, e)
+                continue       
         return df
     
     def batch_insert_data(self, conexao:mysql.connector.MySQLConnection,
@@ -543,10 +619,10 @@ class RFBDataLoader:
                 cursor.executemany(insert_query, batch)
                 conexao.commit()
 
-                logging.info("Inserido lote de %d registros em %s", len(batch), table_name)
+                logging.info(f"Inserido lote de {len(batch)} registros em {table_name}")
         
         except mysql_errors.Error as e:
-            logging.error("Erro ao inserir dados em %s: %s", table_name, e)
+            logging.error(f"Erro ao inserir dados em {table_name}: {e}")
             if cursor:
                 conexao.rollback()
                 raise
