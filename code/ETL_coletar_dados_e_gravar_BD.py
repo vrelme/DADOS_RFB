@@ -459,28 +459,25 @@ class RFBDataLoader:
             tabela_existia = self.verificar_tabela_existe(conexao, table_name)
             if tabela_existia:
                 logging.info(f"Tabela {table_name} já existia e será recriada.")
-            else:
-                logging.info(f"Tabela {table_name} não existia e será criada.")
-            
-            # Drop e criação da tabela, conforme configuração
-            if Config.DROP_AND_RECREATE_TABLES:
+                # Drop e criação da tabela, conforme configuração
                 logging.warning(f"ATENÇÃO: A tabela {table_name} será removida e recriada. Todos os dados existentes serão perdidos.")
                 logging.info(f"Recriando tabela: {table_name}...")
                 cursor.execute(f"DROP TABLE IF EXISTS {table_name}")    # ← DROP se existir
+                logging.info(f"Tabela {table_name} não existia e será criada.")
+            
             else:
                 logging.info(f"Configuração ativa: NÃO remover a tabela {table_name}. Dados existentes serão mantidos.")
-
-            # Executar CREATE TABLE com tratamento de erro
-            try:
-                cursor.execute(table_definition['schema'])              # ← CREATE TABLE
-                conexao.commit()
-                logging.info(f"Tabela {table_name} criada com sucesso.")
-            except mysql_errors.Error as e:
-                logging.error(f"Erro ao criar tabela {table_name}: {e}")
-                # Mostrar o SQL que está causando erro para debugging
-                logging.error(f"SQL executado: {table_definition['schema']}")
-                conexao.rollback()
-                raise
+                # Executar CREATE TABLE com tratamento de erro
+                try:
+                    cursor.execute(table_definition['schema'])              # ← CREATE TABLE
+                    conexao.commit()
+                    logging.info(f"Tabela {table_name} criada com sucesso.")
+                except mysql_errors.Error as e:
+                    logging.error(f"Erro ao criar tabela {table_name}: {e}")
+                    # Mostrar o SQL que está causando erro para debugging
+                    logging.error(f"SQL executado: {table_definition['schema']}")
+                    conexao.rollback()
+                    raise
 
             # Processar cada arquivo
             for filename in file_list:
