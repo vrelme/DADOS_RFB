@@ -1,4 +1,4 @@
-
+pyvenv.cfg
 *.log
 F.K03200$W.SIMPLES.CSV.D41109
 F.K03200$Z.D41109.CNAECSV
@@ -40,3 +40,5 @@ K3241.K03200Y9.D41109.SOCIOCSV
 DADOS_RFB.log
 Estabelecimentos0.zipd1b1t7zi.tmp
 Estabelecimentos4.zipho79gyri.tmp
+venv/pyvenv.cfg
+venv/pyvenv.cfg
