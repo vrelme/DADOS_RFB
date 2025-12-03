@@ -1,5 +1,5 @@
 # Dados Públicos CNPJ
-- Fonte oficial da Receita Federal do Brasil, [aqui](https://dados.govhttps://dados.gov.br/dados/conjuntos-dados/cadastro-nacional-da-pessoa-juridica---cnpj).
+- Fonte oficial da Receita Federal do Brasil, [aqui](https://arquivos.receitafederal.gov.br/dados/cnpj/dados_abertos_cnpj/).
 - Layout dos arquivos, [aqui](https://www.gov.br/receitafederal/dados/cnpj-metadados.pdf).
 
 A Receita Federal do Brasil disponibiliza bases com os dados públicos do cadastro nacional de pessoas jurídicas (CNPJ). 
@@ -12,20 +12,25 @@ Nesse repositório consta um processo de ETL para:
 
 >**ii)** descompactar; 
 
->**iii)** ler, tratar e 
+>**iii)** ler;
 
->**iv)** inserir num banco de dados relacional PostgreSQL.
+>**iv)** tratar; 
+
+>**v)** inserir
+
+Em um banco de dados relacional MariaDB.
 
 ---------------------
 
 ### Infraestrutura necessária:
-- [Python 3.8](https://www.python.org/downloads/release/python-3810/)
-- [PostgreSQL 14.2](https://www.postgresql.org/download/)
+- [Python 3.14.0](https://www.python.org/downloads/release/python-3140/)
+- [MySQL Workbench 8.0.44]([https://dev.mysql.com/downloads/workbench/)
+- [Como Instalar WorkBench](https://youtu.be/TMBkdYagi_0?si=otRxmBooxSCRuqW6)
   
 ---------------------
 
-### How to use:
-1. Com o Postgres instalado, inicie a instância do servidor (pode ser local) e crie o banco de dados conforme o arquivo `banco_de_dados.sql`.
+### Como usar:
+1. Com o WorkBench instalado, inicie a instância do servidor (pode ser local) e crie o banco de dados conforme o arquivo `banco_de_dados.sql`.
 
 2. Crie um arquivo `.env` no diretório `code`, conforme as variáveis de ambiente do seu ambiente de trabalho (localhost). Utilize como referência o arquivo `.env_template`. Você pode também, por exemplo, renomear o arquivo de `.env_template` para apenas `.env` e então utilizá-lo:
    - `OUTPUT_FILES_PATH`: diretório de destino para o donwload dos arquivos
@@ -42,8 +47,8 @@ pip install -r requirements.txt
 ```
 
 4. Execute o arquivo `ETL_coletar_dados_e_gravar_BD.py` e aguarde a finalização do processo.
-   - Os arquivos são grandes. Dependendo da infraestrutura isso deve levar muitas horas para conclusão.
-   - Arquivos de 08/05/2021: `4,68 GB` compactados e `17,1 GB` descompactados.
+   - Os arquivos são grandes. Dependendo da infraestrutura isso deve levar pelo menos 7 horas para conclusão.
+   - Arquivos de 14/11/2025: `12,8 GB` compactados e `22,9 GB` descompactados.
     
 ---------------------
 
