@@ -1,0 +1,70 @@
+@startuml
+title Diagrama de Classes - Sistema de Processamento de Dados RFB
+
+' =====================
+' Classes principais
+' =====================
+class Config {
+    +LOG_FORMAT
+    +LOG_FILE
+    +DADOS_RF_URL
+    +BATCH_SIZE
+    +MAX_RETRIES
+    +RETRY_DELAY
+    +DROP_AND_RECREATE_TABLES
+}
+
+class DatabaseManager {
+    -connection
+    +connect()
+    +ensure_connection()
+    +get_cursor()
+}
+
+class FileProcessor {
+    +create_directories()
+    +check_remote_file_diff()
+    +download_progress()
+    +extract_files()
+}
+
+class DataProcessor {
+    +categorize_files()
+    +convert_to_native_types()
+}
+
+class RFBDataLoader {
+    -env_path
+    -db_manager
+    -file_processor
+    -data_processor
+    -output_dir
+    -extract_dir
+    -files
+    +setup_logging()
+    +load_environment()
+    +setup_directories()
+    +fetch_file_list()
+    +download_files()
+    +process_data_files()
+    +get_table_definitions()
+    +process_table_data()
+    +process_single_file_optimized()
+    +apply_optimized_transformations()
+    +convert_chunk_to_native_types()
+    +batch_insert_data_optimized()
+    +create_indexes()
+    +run()
+}
+
+' =====================
+' Relações entre classes
+' =====================
+RFBDataLoader --> Config : usa
+RFBDataLoader --> DatabaseManager : compõe
+RFBDataLoader --> FileProcessor : compõe
+RFBDataLoader --> DataProcessor : compõe
+
+DatabaseManager --> Config : usa
+
+@enduml

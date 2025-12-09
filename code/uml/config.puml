@@ -1,0 +1,13 @@
+@startuml
+title Classe Config
+
+class Config {
+    +LOG_FORMAT : str
+    +LOG_FILE : str
+    +DADOS_RF_URL : str
+    +BATCH_SIZE : int
+    +MAX_RETRIES : int
+    +RETRY_DELAY : int
+    +DROP_AND_RECREATE_TABLES : bool
+}
+@enduml

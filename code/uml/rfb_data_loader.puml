@@ -1,0 +1,33 @@
+@startuml
+title Classe RFBDataLoader
+
+class RFBDataLoader {
+    -env_path
+    -db_manager : DatabaseManager
+    -file_processor : FileProcessor
+    -data_processor : DataProcessor
+    -output_dir : Path
+    -extract_dir : Path
+    -files : list
+
+    +setup_logging()
+    +load_environment()
+    +setup_directories()
+    +fetch_file_list()
+    +download_files()
+    +process_data_files()
+    +get_table_definitions()
+    +process_table_data()
+    +process_single_file_optimized()
+    +apply_optimized_transformations()
+    +convert_chunk_to_native_types()
+    +batch_insert_data_optimized()
+    +create_indexes()
+    +run()
+}
+
+RFBDataLoader --> DatabaseManager : utiliza
+RFBDataLoader --> FileProcessor : utiliza
+RFBDataLoader --> DataProcessor : utiliza
+RFBDataLoader --> Config : lê constantes
+@enduml

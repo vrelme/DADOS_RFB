@@ -1,0 +1,8 @@
+@startuml
+title Classe DataProcessor
+
+class DataProcessor {
+    +categorize_files(file_list) : dict
+    +convert_to_native_types(value) : Any
+}
+@enduml

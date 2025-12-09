@@ -1,0 +1,10 @@
+@startuml
+title Classe DatabaseManager
+
+class DatabaseManager {
+    -connection
+    +connect() : MySQLConnection
+    +ensure_connection()
+    +get_cursor()
+}
+@enduml

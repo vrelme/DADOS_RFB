@@ -1,0 +1,10 @@
+@startuml
+title Classe FileProcessor
+
+class FileProcessor {
+    +create_directories(*paths)
+    +check_remote_file_diff(url, path)
+    +download_progress(current, total)
+    +extract_files(zip_files, extract_to)
+}
+@enduml
