@@ -1,5 +1,5 @@
 # Dados Públicos CNPJ
-- Fonte oficial da Receita Federal do Brasil, [aqui](https://arquivos.receitafederal.gov.br/dados/cnpj/dados_abertos_cnpj/).
+- Fonte oficial da Receita Federal do Brasil.
 - Layout dos arquivos, [aqui](https://www.gov.br/receitafederal/dados/cnpj-metadados.pdf).
 
 A Receita Federal do Brasil disponibiliza bases com os dados públicos do cadastro nacional de pessoas jurídicas (CNPJ). 
