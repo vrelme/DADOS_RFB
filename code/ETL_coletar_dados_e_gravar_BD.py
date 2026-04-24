@@ -9,25 +9,18 @@ Adaptado por: Vander Ribeiro Elme
 import os
 import time
 import logging
-import hashlib
 import zipfile
-import csv
 from typing import List, Dict, Tuple, Optional, Any
 from urllib.parse import urljoin
 from pathlib import Path
-from decimal import Decimal
 import contextlib
-
-import requests
 import mysql.connector
 from mysql.connector import errors as mysql_errors
-from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 import pandas as pd
-import dask.dataframe as dd
-from dask.diagnostics import ProgressBar
-import wget
 import numpy as np
+import shutil
+
 
 class Config:
     """Configurações da aplicação."""
@@ -36,8 +29,10 @@ class Config:
     LOG_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
     LOG_FILE =  'DADOS_RFB.log'
 
-    # URLs base
-    DADOS_RF_URL = 'https://arquivos.receitafederal.gov.br/index.php/s/gn672Ad4CF8N6TK?dir=/Dados/Cadastros/CNPJ/2026-04'
+    # DIR base
+    OUTPUT_DIR = None
+    EXTRACT_DIR = None
+
 
     # Tamanhos de lote
     BATCH_SIZE = 10000
@@ -62,7 +57,7 @@ class DatabaseManager:
                     user=os.getenv('DB_USER'),
                     password=os.getenv('DB_PASSWORD'),
                     database=os.getenv('DB_NAME'),
-                    use_pure=True, 
+                    # use_pure=True, 
                     auth_plugin='mysql_native_password',
                     charset='utf8mb4',
                     collation='utf8mb4_unicode_ci',
@@ -71,7 +66,7 @@ class DatabaseManager:
                 )
 
                 logging.info("Conexão com o banco de dados estabelecida com sucesso")
-                logging.info("Versão do banco: %s",self.connection.server_info)
+                logging.info("Versão do banco: %s", self.connection.get_server_info())
                 return self.connection
         
             except mysql_errors.Error as e:
@@ -122,30 +117,7 @@ class FileProcessor:
                 raise
         return created_paths
     
-    @staticmethod
-    def check_remote_file_diff(url:str, local_path:Path) -> bool:
-        """Verifica se o arquivo remoto é diferente do local."""
-        try:
-            response = requests.head(url, timeout=30)
-            response.raise_for_status()
-
-            remote_size = int(response.headers.get('content-length',0))
-            local_path_obj = Path(local_path)
-
-            if not local_path_obj.exists():
-                logging.info("Arquivo local não existe: %s",local_path)
-                return True
-            
-            if local_path_obj.stat().st_size != remote_size:
-                logging.info("Tamanho diferente: local=%d, remoto=%d", local_path_obj.stat().st_size, remote_size)
-                return True
-            
-            return False # Para performance, vamos pular a verificação de hash por enquanto
-                
-        except requests.RequestException as e:
-            logging.error("Erro ao verificar arquivo remoto %s: %s", url, e)
-            return True
-        
+       
     @staticmethod
     def download_progress(current: int, total: int, width: int = 80):
         """Barra de progresso para download."""
@@ -164,6 +136,13 @@ class FileProcessor:
             except (zipfile.BadZipFile, OSError) as e:
                 logging.error ("Erro ao descompactar %s: %s", zip_file, e)
                 raise        
+
+    def reset_extract_dir(self):
+        if Config.EXTRACT_DIR.exists():
+            shutil.rmtree(Config.EXTRACT_DIR)
+
+        Config.EXTRACT_DIR.mkdir(parents=True, exist_ok=True)
+        logging.info("Diretório de extração resetado")           
 
 class DataProcessor:
     """"Processador de dados."""
@@ -203,7 +182,7 @@ class DataProcessor:
                 return pd.Timestamp(value).to_pydatetime().date()
             except Exception:
                 return None
-        elif isinstance(value, (np.integer, np.int64)):
+        elif isinstance(value, (np.integer, np.int32, np.int64)):
             return int(value)
         elif isinstance(value, (np.floating, np.float64)):
             return float(value) if not pd.isna(value) else None
@@ -243,65 +222,37 @@ class RFBDataLoader:
         dotenv_path = self.env_path / '.env'
         if dotenv_path.exists():
             load_dotenv(dotenv_path = dotenv_path)
+            Config.OUTPUT_DIR = Path(os.getenv('OUTPUT_DIR'))
+            Config.EXTRACT_DIR = Path(os.getenv('EXTRACT_DIR'))
+
             logging.info("Variáveis de ambiente carregadas de: %s", dotenv_path)
         else:
             logging.warning("Ärquivo .env não encontrado em: %s", dotenv_path)
 
-    def setup_directories(self) -> Tuple[Path, Path]:
+    def setup_directories(self):
         """Configura dirétorios de trabalho."""
-        output_path = Path(os.getenv('OUTPUT_FILES_PATH','output'))
-        extract_path = Path(os.getenv('EXTRACTED_FILES_PATH','estracted'))
 
-        self.file_processor.create_directories(output_path, extract_path)
-        return output_path, extract_path
+        self.file_processor.create_directories(Config.OUTPUT_DIR, Config.EXTRACT_DIR)
+        return Config.OUTPUT_DIR, Config.EXTRACT_DIR
 
-    def fetch_file_list(self, url:str = Config.DADOS_RF_URL) -> List[str]:
-        """Öntém lista de arquivos do site da RFB."""
-        try:
-            response = requests.get(url, timeout=30)
-            response.raise_for_status()
+    def get_local_zip_files(self) -> List[Path]:
+        """Lista arquivos ZIP do diretório local"""
 
-            soup = BeautifulSoup(response.content, 'lxml')
-            files = []
+        files = [
+            f for f in Config.OUTPUT_DIR.iterdir()
+            if f.is_file() and f.suffix.lower() == '.zip'
+        ]
 
-            for link in soup.find_all('a', href = True):
-                href = link['href']
-                if href.endswith('.zip'):
-                    files.append(href)
-                    logging.info('Arquivo encontrato: %s', href)
+        if not files:
+            logging.warning("Nenhum arquivo ZIP encontrado em %s", Config.OUTPUT_DIR)
+        else:
+            logging.info("Encontrados %d arquivos ZIP", len(files))
 
-            return files
-        except requests.RequestException as e:
-            logging.error("Erro ao obter lista de  arquivos: %s", e)
-            raise      
-        
-    def download_files(self, files:List[str], base_url: str = Config.DADOS_RF_URL) -> List[Path]:
-        """Faz download dos arquivos."""
-        downloaded_files = []
-
-        for filename in files:
-            file_url = urljoin(base_url, filename)
-            local_path = self.output_dir / filename
-
-            if not self.file_processor.check_remote_file_diff(file_url, local_path):
-                logging.info("Ärquivo já está atualizado: %s", filename)
-                downloaded_files.append(local_path)
-                continue
-
-            try:
-                logging.info("Baixando: %s", filename)
-                wget.download(file_url, out=str(self.output_dir), bar=self.file_processor.download_progress)
-                downloaded_files.append(local_path)
-                print() # Nova linha após a barra de progresso
-
-            except Exception as e:
-                logging.error("Erro ao baixar %s: %s", filename, e)
-                raise
-        return downloaded_files
+        return files
 
     def process_data_files(self, categorizado_files: Dict[str, List[str]]):
         """Pocessa os arquivos de dados e insere no banco de dados."""
-        # Usar uma única conexào para todo processo
+        # Usar uma única conexão para todo processo
         conexao = None
 
         try: 
@@ -339,7 +290,7 @@ class RFBDataLoader:
         return {
             'empresa': {
                 'schema': """CREATE TABLE empresa (
-                    cnpj_basico VARCHAR(14),
+                    cnpj_basico VARCHAR(14) PRIMARY KEY,
                     razao_social VARCHAR(255),
                     natureza_juridica INT,
                     qualificacao_responsavel INT,
@@ -354,7 +305,7 @@ class RFBDataLoader:
             },
             'estabelecimento': {
                 'schema': """CREATE TABLE estabelecimento (
-                    cnpj_basico VARCHAR(14),
+                    cnpj_basico VARCHAR(14) PRIMARY KEY,
                     cnpj_ordem VARCHAR(4),
                     cnpj_dv VARCHAR(2),
                     identificador_matriz_filial INT,
@@ -395,7 +346,7 @@ class RFBDataLoader:
             },
             'simples': {
                 'schema': """CREATE TABLE simples (
-                    cnpj_basico VARCHAR(14),
+                    cnpj_basico VARCHAR(14) PRIMARY KEY,
                     opcao_simples VARCHAR(1),
                     data_opcao_simples DATE,
                     data_exclusao_simples DATE,
@@ -408,7 +359,7 @@ class RFBDataLoader:
             },
             'socios': {
                     'schema': """CREATE TABLE socios (
-                        cnpj_basico VARCHAR(14),
+                        cnpj_basico VARCHAR(14) PRIMARY KEY,
                         identificador_socio INT,
                         nome_socio_razao_social VARCHAR(255),
                         cpf_cnpj_socio VARCHAR(14),
@@ -574,16 +525,12 @@ class RFBDataLoader:
             ):
                 chunk_number += 1
 
-                # Limpar aspas extras e espaços antes das transformações
-                for col in chunk.columns:
-                    if chunk[col].dtype == 'object':
-                        chunk[col] = chunk[col].str.strip().str.strip('"')                
+                chunk.columns = column_names
 
                 # Aplicar transformações otimizadas
-                chunk = self.apply_optimized_transformations(chunk, column_names)
+                chunk = self.sanitize_chunk(chunk, column_names)
 
-                # Converter para tipos nativos Python
-                data = self.convert_chunk_to_native_types(chunk)
+                data = list(chunk.itertuples(index=False, name=None))
 
                 # Inserir dados no banco
                 if data:
@@ -591,35 +538,14 @@ class RFBDataLoader:
                     total_rows += len(data)
 
                 logging.info("Processadas %d linhas da tabela %s (chunk %d)", 
-                             total_rows, table_name, chunk_number + 1)
+                             total_rows, table_name, chunk_number)
             
-                logging.info("Total de %d linhas processadas para tabela %s", total_rows, table_name)
+            logging.info("Total de %d linhas processadas para tabela %s", total_rows, table_name)
 
         except Exception as e:
             logging.error("Erro ao processar arquivo %s: %s", file_path, e)
             raise
-
-    def get_optimized_dtypes(self, column_names: List[str]) -> Dict[str, str]:
-        """Retorna mapeamento de tipos otimizados para pandas.
-        Observação: ler inicialmente como 'string' para permitir limpeza antes da conversão.
-        """
-        dtype_map = {}
-        for col in column_names:
-            # manter campos de identificação como string (CNPJ/CPF)
-            if 'cnpj' in col.lower() or col in ['cpf_cnpj_socio', 'cnpj_ordem', 'cnpj_dv']:
-                dtype_map[col] = 'string'                   
-            elif col in ['capital_social']:
-                dtype_map[col] = 'string'  # Converter depois
-            elif any(keyword in col for keyword in ['natureza_juridica', 'qualificacao', 'identificador', 'situacao', 'motivo',
-                                      'porte_empresa', 'codigo', 'municipio', 'pais', 'faixa_etaria']):
-                dtype_map[col] = 'Int32'
-            elif any(keyword in col for keyword in ['data', 'date']):
-                dtype_map[col] = 'string'  # Será convertido para datetime
-            else:
-                # Ler todo o resto inicialmente como string para permitir limpeza segura
-                dtype_map[col] = 'string'
-        return dtype_map
-    
+   
     def get_date_columns(self, column_names: List[str]) -> List[str]:
         """Identifica colunas de data para parsing automático."""
         date_columns = []
@@ -628,73 +554,77 @@ class RFBDataLoader:
                 date_columns.append(col)
         return date_columns
 
-    def apply_optimized_transformations(self, df: pd.DataFrame, column_names: List[str]) -> pd.DataFrame:
-        import re
 
-        def clean_string_series(s: pd.Series) -> pd.Series:
-            # Força string, remove aspas, NBSP e espaços
-            s = s.astype(str).str.strip().str.replace('"', '', regex=False).str.replace('\xa0', '', regex=False)
-            s = s.replace({'nan': None, 'None': None, '': None})
+    def sanitize_chunk(self, df: pd.DataFrame, column_names: list) -> pd.DataFrame:
+
+        def clean_string(s):
+            s = s.astype(str).str.strip()
+            s = s.str.replace('"', '', regex=False)
+            s = s.str.replace('\xa0', '', regex=False)
+            s = s.replace({
+                '': None,
+                'nan': None,
+                'NaN': None,
+                'None': None,
+                'NULL': None,
+                'null': None
+            })
             return s
 
-        def clean_int_series(s: pd.Series) -> pd.Series:
-            s = clean_string_series(s)
-            # Remove tudo que não seja dígito ou sinal negativo
-            s = s.fillna('').astype(str).str.replace(r'[^0-9\-]', '', regex=True)
+        def clean_int(s):
+            s = clean_string(s)
+            s = s.fillna('').astype(str)
+            s = s.str.replace(r'[^0-9\-]', '', regex=True)
             s = s.replace({'': None})
-            return pd.to_numeric(s, errors='coerce').astype('Int32')
+            s = pd.to_numeric(s, errors='coerce')
+            return s.apply(lambda x: int(x) if pd.notnull(x) else None)
 
-        def clean_decimal_series(s: pd.Series) -> pd.Series:
-            s = clean_string_series(s)
-            # Remove pontos de milhares e troca vírgula por ponto
-            # Ex: "1.234,56" -> "1234.56"
-            s = s.fillna('').astype(str).str.replace(r'\.', '', regex=True).str.replace(',', '.', regex=False)
+        def clean_float(s):
+            s = clean_string(s)
+            s = s.fillna('').astype(str)
+            s = s.str.replace('.', '', regex=False)
+            s = s.str.replace(',', '.', regex=False)
             s = s.replace({'': None})
-            return pd.to_numeric(s, errors='coerce')
+            s = pd.to_numeric(s, errors='coerce')
+            return s.apply(lambda x: float(x) if pd.notnull(x) else None)
 
-        def clean_date_series(s: pd.Series) -> pd.Series:
-            s = clean_string_series(s).fillna('')
-            # Remove tudo que não seja dígito (ex.: aspas) e tenta parse YYYYMMDD
+        def clean_date(s):
+            s = clean_string(s)
+            s = s.fillna('').astype(str)
             s = s.str.replace(r'[^0-9]', '', regex=True)
             s = s.replace({'': None})
-            return pd.to_datetime(s, format='%Y%m%d', errors='coerce')
+            s = pd.to_datetime(s, format='%Y%m%d', errors='coerce')
+            return s.dt.date
 
-        """Aplica transformações otimizadas nos dados."""
         for col in column_names:
             if col not in df.columns:
                 continue
 
             try:
-                if col == 'capital_social':
-                    # Limpar e converter capital social
-                    df[col] = clean_decimal_series(df[col])
-                
-                elif col in ['natureza_juridica', 'qualificacao_responsavel', 'identificador_matriz_filial', 'situacao_cadastral', 
-                             'motivo_situacao_cadastral', 'porte_empresa', 'municipio', 'pais', 'faixa_etaria', 'codigo']:
-                    
-                    # Limpar e converter capital social
-                    df[col] = clean_int_series(df[col])
+                if col in [
+                    'natureza_juridica', 'qualificacao_responsavel',
+                    'identificador_matriz_filial', 'situacao_cadastral',
+                    'porte_empresa', 'municipio', 'pais',
+                    'faixa_etaria', 'codigo'
+                ]:
+                    df[col] = clean_int(df[col])
 
-                elif any(keyword in col for keyword in ['data', 'date']):
-                    df[col] = clean_date_series(df[col])
-                    
+                elif col == 'capital_social':
+                    df[col] = clean_float(df[col])
+
+                elif 'data' in col.lower():
+                    df[col] = clean_date(df[col])
+
                 else:
-                    # Limpeza bsica para strings
-                    df[col] = clean_string_series(df[col])
-                    
-            except Exception as e:
-                logging.warning (f"Erro ao transformar coluna {col}: {e}")
-                continue
-        
-        return df
+                    df[col] = clean_string(df[col])
 
-    def convert_chunk_to_native_types(self, chunk: pd.DataFrame) -> List[Tuple]:
-        """Converte chunk do pandas para lista de tuplas com tipos nativos."""
-        data = []
-        for row in chunk.itertuples(index=False, name=None):
-            converted_row = tuple(self.data_processor.convert_to_native_types(value) for value in row)
-            data.append(converted_row)
-        return data
+            except Exception as e:
+                logging.warning(f"Erro ao sanitizar coluna {col}: {e}")
+
+        # GARANTIA FINAL (CRÍTICO)
+        df = df.replace({np.nan: None})
+
+        return df
 
     def batch_insert_data_optimized(self, conexao: mysql.connector.MySQLConnection,
                                    table_name: str, data: List[Tuple],
@@ -712,21 +642,25 @@ class RFBDataLoader:
                     cursor = conexao.cursor()
                     columns = ', '.join(column_names)
                     placeholders = ', '.join(['%s'] * len(column_names))
-                    insert_query = f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})"
+                    insert_query = f"INSERT IGNORE INTO {table_name} ({columns}) VALUES ({placeholders})"
             
                     # calcula tamanho do lote para esta tentativa (mínimo 1)
                     current_batch_size = max(1, Config.BATCH_SIZE // (2 ** (current_attempt - 1)))
 
-                    total_inserted = 0
+                    batch_count = 0
                     # tenta inserir todo o conjunto em batches de current_batch_size
                     for i in range(0, len(data), current_batch_size):
                         batch = data[i:i + current_batch_size]
                         cursor.executemany(insert_query, batch)
-                        conexao.commit()
-                        total_inserted += len(batch)
-                        logging.info(f"Inserido lote de {len(batch)} registros em {table_name} (total: {total_inserted})")
+                        batch_count += 1
+                        
+                        if batch_count % 5 == 0:
+                            conexao.commit()
+
+                        logging.info(f"Inserido lote de {len(batch)} registros em {table_name} (total: {batch_count})")
 
                     # se chegou até aqui sem exceção, sucesso -> sair do loop de tentativa
+                    conexao.commit()
                     return
 
                 except mysql_errors.Error as e:
@@ -753,37 +687,6 @@ class RFBDataLoader:
             if cursor:
                 cursor.close()
 
-    def insert_in_smaller_batches(self, conexao: mysql.connector.MySQLConnection,
-                                 table_name: str, data: List[Tuple],
-                                 column_names: List[str], cursor):
-        """Insere dados em lotes menores em caso de erro."""
-        cursor = None
-
-        try:
-            cursor = conexao.cursor()
-            batch_size = 1000
-            columns = ', '.join(column_names)
-            placeholders = ', '.join(['%s'] * len(column_names))
-            insert_query = f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})"
-        
-            successful_inserts = 0
-        
-            for i in range(0, len(data), batch_size):
-                batch = data[i:i + batch_size]
-                try:
-                    cursor.executemany(insert_query, batch)
-                    conexao.commit()
-                    successful_inserts += len(batch)
-                    logging.info("Inserido sub-lote de %d registros em %s", len(batch), table_name)
-                except mysql_errors.Error as e:
-                    logging.error("Erro em sub-lote %s: %s", table_name, e)
-                    conexao.rollback()
-                    continue
-            logging.error("Total de registros inseridos com sucesso em %s: %d", 
-                         table_name, successful_inserts)
-        finally:
-            if cursor:
-                cursor.close()
 
     def create_indexes(self, conexao:mysql.connector.MySQLConnection):
         """Cria índices no banco de dados."""
@@ -793,11 +696,11 @@ class RFBDataLoader:
             cursor = conexao.cursor()
 
             additional_indexes = [
-            'CREATE INDEX idx_estabelecimento_uf ON estabelecimento(uf)',
-            'CREATE INDEX idx_establecimento_municipio ON estabelecimento(municipio)',
-            'CREATE INDEX idx_establecimento_cnae ON estabelecimento(cnae_fiscal_principal)',
-            'CREATE INDEX idx_empresa_natureza ON empresa(natureza_juridica)',
-            'CREATE INDEX idx_socios_cpf ON socios(cpf_cnpj_socio)',
+            'CREATE INDEX IF NOT EXISTS idx_estabelecimento_uf ON estabelecimento(uf)',
+            'CREATE INDEX IF NOT EXISTS idx_establecimento_municipio ON estabelecimento(municipio)',
+            'CREATE INDEX IF NOT EXISTS idx_establecimento_cnae ON estabelecimento(cnae_fiscal_principal)',
+            'CREATE INDEX IF NOT EXISTS idx_empresa_natureza ON empresa(natureza_juridica)',
+            'CREATE INDEX IF NOT EXISTS idx_socios_cpf ON socios(cpf_cnpj_socio)',
             ]
 
             for index in additional_indexes:
@@ -817,60 +720,64 @@ class RFBDataLoader:
         total_start = time.time()
 
         try:
-            logging.info("Iniciando processo de carga de dados da RFB")
+            logging.info("Iniciando processo local de carga de dados")
 
-            # 1. Obter lista de arquivos
-            logging.info("Obtendo lista de arquivos...")
-            self.files = self.fetch_file_list()
+            # 1. Ler arquivos locais
+            logging.info("Lendo arquivos locais...")
+            self.files = self.get_local_zip_files()
 
-            # 2. Download dos arquivos
-            logging.info("Iniciando download dos arquivos...")
-            downloaded_files = self.download_files(self.files)
+            if not self.files:
+                logging.warning("Nenhum arquivo ZIP encontrado para processamento. Verifique o diretório de entrada.")
+                return
+            
+            # 2. Resetar diretório de extração (limpar arquivos antigos)
+            self.file_processor.reset_extract_dir()
 
             # 3. Extrair arquivos
             logging.info("Extraindo arquivos...")
-            self.file_processor.extract_files(downloaded_files, self.extract_dir)
+            self.file_processor.extract_files(self.files, Config.EXTRACT_DIR)
 
-            # 4. Listar e categorizar arquivos
-            logging.info("Categorizar arquivos...")
-            all_files = [f.name for f in self.extract_dir.iterdir() if f.is_file()]
+            # 4. Listar arquivos extraidos
+            all_files = [
+                f.name for f in Config.EXTRACT_DIR.iterdir() 
+                if f.is_file()
+            ]
+            logging.info("Listando arquivos extraidos: %d", len(all_files))
+
+            # 5. Categorizar arquivos
+            logging.info("Categorizando arquivos...")
             categorizado_files = self.data_processor.categorize_files(all_files)
                 
-            # 5. Processar dados
+            # 6. Processar dados
             logging.info("Processando dados...")
             process_start = time.time()
             self.process_data_files(categorizado_files)
+
             process_time = time.time() - process_start
+
             logging.info("Tempo de processamento: %.2f segundos", process_time)
 
-            # 6. Criar índices
+            # 7. Criar índices
             logging.info("Criando índices...")
-            index_start = time.time()
             conexao_indices = self.db_manager.connect()
             try:
                 self.create_indexes(conexao_indices)
             finally:
                 if conexao_indices and conexao_indices.is_connected():
-                    conexao_indices.close()
-
-            index_time = time.time() - index_start
-            logging.info("Tempo para criar índices: %.2f segundos", index_time)
-
+                    conexao_indices.close()            
+            
             total_time = time.time() - total_start
             logging.info("Processo de carga concluído em %.2f segundos", total_time)
-            logging.info("Processo 100 %% finalizado")
 
         except Exception as e:
             logging.error("Erro durante execução: %s", e)
             raise
-        finally:
-            if self.db_manager.connection and self.db_manager.connection.is_connected():
-                self.db_manager.connection.close()
+
                 
 
 def main():
     """Função principal."""
-    loader = RFBDataLoader('F:\\Repositorio\\00_Programacao\\08-DADOS_RFB\\DADOS_RFB\\code')
+    loader = RFBDataLoader('F:\\Repositorio\\15_Git\\DADOS_RFB\\code')
     loader.run()
 
 if __name__ == "__main__":
