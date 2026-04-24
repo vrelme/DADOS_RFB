@@ -53,7 +53,7 @@ pip install -r requirements.txt
 ---------------------
 
 ### Tabelas geradas:
-- Para maiores informações, consulte o [layout](https://www.gov.br/receitafederal/pt-br/assuntos/orientacao-tributaria/cadastros/consultas/arquivos/NOVOLAYOUTDOSDADOSABERTOSDOCNPJ.pdf).
+- Para maiores informações, consulte o [layout]((https://github.com/vrelme/DADOS_RFB/blob/dev/NOVOLAYOUTDOSDADOSABERTOSDOCNPJ.pdf).
   - `empresa`: dados cadastrais da empresa em nível de matriz
   - `estabelecimento`: dados analíticos da empresa por unidade / estabelecimento (telefones, endereço, filial, etc)
   - `socios`: dados cadastrais dos sócios das empresas
