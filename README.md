@@ -70,3 +70,6 @@ pip install -r requirements.txt
 
 ### Modelo de Entidade Relacionamento:
 ![alt text](https://github.com/vrelme/DADOS_RFB/blob/dev/Dados_RFB_ERD.png)
+
+### Diagramas UML:
+![alt text](https://github.com/vrelme/DADOS_RFB/blob/dev/Diagramas_UML.png)
