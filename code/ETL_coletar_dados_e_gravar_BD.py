@@ -37,7 +37,7 @@ class Config:
     LOG_FILE =  'DADOS_RFB.log'
 
     # URLs base
-    DADOS_RF_URL = 'https://arquivos.receitafederal.gov.br/dados/cnpj/dados_abertos_cnpj/2025-10/'
+    DADOS_RF_URL = 'https://arquivos.receitafederal.gov.br/index.php/s/gn672Ad4CF8N6TK?dir=/Dados/Cadastros/CNPJ/2026-04'
 
     # Tamanhos de lote
     BATCH_SIZE = 10000

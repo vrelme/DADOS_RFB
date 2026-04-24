@@ -187939,3 +187939,277 @@
 2025-11-28 20:16:41,386 - INFO - Tempo para criar índices: 680.86 segundos
 2025-11-28 20:16:41,387 - INFO - Processo de carga concluído em 26419.59 segundos
 2025-11-28 20:16:41,387 - INFO - Processo 100 %% finalizado
+2026-04-21 13:48:48,435 - INFO - Variáveis de ambiente carregadas de: F:\Repositorio\00_Programacao\08-DADOS_RFB\DADOS_RFB\code\.env
+2026-04-21 13:48:48,494 - INFO - Diretório criado: D:\OPERACAO\OUTPUT_FILES
+2026-04-21 13:48:48,494 - INFO - Diretório criado: D:\OPERACAO\EXTRACTED_FILES
+2026-04-21 13:48:48,495 - INFO - Iniciando processo de carga de dados da RFB
+2026-04-21 13:48:48,495 - INFO - Obtendo lista de arquivos...
+2026-04-21 13:48:49,235 - ERROR - Erro ao obter lista de  arquivos: 404 Client Error: Not Found for url: https://arquivos.receitafederal.gov.br/dados/cnpj/dados_abertos_cnpj/2025-10/
+2026-04-21 13:48:49,235 - ERROR - Erro durante execução: 404 Client Error: Not Found for url: https://arquivos.receitafederal.gov.br/dados/cnpj/dados_abertos_cnpj/2025-10/
+2026-04-21 13:52:18,336 - INFO - Variáveis de ambiente carregadas de: F:\Repositorio\00_Programacao\08-DADOS_RFB\DADOS_RFB\code\.env
+2026-04-21 13:52:18,337 - INFO - Diretório criado: D:\OPERACAO\OUTPUT_FILES
+2026-04-21 13:52:18,337 - INFO - Diretório criado: D:\OPERACAO\EXTRACTED_FILES
+2026-04-21 13:52:18,337 - INFO - Iniciando processo de carga de dados da RFB
+2026-04-21 13:52:18,337 - INFO - Obtendo lista de arquivos...
+2026-04-21 13:52:18,874 - ERROR - Erro durante execução: Couldn't find a tree builder with the features you requested: lxml. Do you need to install a parser library?
+2026-04-21 13:53:47,283 - INFO - Variáveis de ambiente carregadas de: F:\Repositorio\00_Programacao\08-DADOS_RFB\DADOS_RFB\code\.env
+2026-04-21 13:53:47,283 - INFO - Diretório criado: D:\OPERACAO\OUTPUT_FILES
+2026-04-21 13:53:47,284 - INFO - Diretório criado: D:\OPERACAO\EXTRACTED_FILES
+2026-04-21 13:53:47,284 - INFO - Iniciando processo de carga de dados da RFB
+2026-04-21 13:53:47,284 - INFO - Obtendo lista de arquivos...
+2026-04-21 13:53:47,882 - INFO - Iniciando download dos arquivos...
+2026-04-21 13:53:47,882 - INFO - Extraindo arquivos...
+2026-04-21 13:53:47,882 - INFO - Categorizar arquivos...
+2026-04-21 13:53:47,883 - INFO - Processando dados...
+2026-04-21 13:53:48,017 - INFO - package: mysql.connector.plugins
+2026-04-21 13:53:48,017 - INFO - plugin_name: mysql_native_password
+2026-04-21 13:53:48,026 - INFO - AUTHENTICATION_PLUGIN_CLASS: MySQLNativePasswordAuthPlugin
+2026-04-21 13:53:48,027 - INFO - package: mysql.connector.plugins
+2026-04-21 13:53:48,027 - INFO - plugin_name: caching_sha2_password
+2026-04-21 13:53:48,027 - INFO - AUTHENTICATION_PLUGIN_CLASS: MySQLCachingSHA2PasswordAuthPlugin
+2026-04-21 13:53:48,042 - INFO - Conexão com o banco de dados estabelecida com sucesso
+2026-04-21 13:53:48,042 - INFO - Versão do banco: 8.0.44
+2026-04-21 13:53:48,044 - INFO - Conexão com o banco fechada
+2026-04-21 13:53:48,044 - INFO - Tempo de processamento: 0.16 segundos
+2026-04-21 13:53:48,044 - INFO - Criando índices...
+2026-04-21 13:53:48,114 - INFO - Conexão com o banco de dados estabelecida com sucesso
+2026-04-21 13:53:48,114 - INFO - Versão do banco: 8.0.44
+2026-04-21 13:53:48,114 - INFO - Criando índice: CREATE INDEX idx_estabelecimento_uf ON estabelecimento(uf)
+2026-04-21 13:53:48,140 - WARNING - Não foi possível criar índices CREATE INDEX idx_estabelecimento_uf ON estabelecimento(uf): 1061 (42000): Duplicate key name 'idx_estabelecimento_uf'
+2026-04-21 13:53:48,141 - INFO - Criando índice: CREATE INDEX idx_establecimento_municipio ON estabelecimento(municipio)
+2026-04-21 13:53:48,142 - WARNING - Não foi possível criar índices CREATE INDEX idx_establecimento_municipio ON estabelecimento(municipio): 1061 (42000): Duplicate key name 'idx_establecimento_municipio'
+2026-04-21 13:53:48,142 - INFO - Criando índice: CREATE INDEX idx_establecimento_cnae ON estabelecimento(cnae_fiscal_principal)
+2026-04-21 13:53:48,143 - WARNING - Não foi possível criar índices CREATE INDEX idx_establecimento_cnae ON estabelecimento(cnae_fiscal_principal): 1061 (42000): Duplicate key name 'idx_establecimento_cnae'
+2026-04-21 13:53:48,143 - INFO - Criando índice: CREATE INDEX idx_empresa_natureza ON empresa(natureza_juridica)
+2026-04-21 13:53:48,146 - WARNING - Não foi possível criar índices CREATE INDEX idx_empresa_natureza ON empresa(natureza_juridica): 1061 (42000): Duplicate key name 'idx_empresa_natureza'
+2026-04-21 13:53:48,146 - INFO - Criando índice: CREATE INDEX idx_socios_cpf ON socios(cpf_cnpj_socio)
+2026-04-21 13:53:48,148 - WARNING - Não foi possível criar índices CREATE INDEX idx_socios_cpf ON socios(cpf_cnpj_socio): 1061 (42000): Duplicate key name 'idx_socios_cpf'
+2026-04-21 13:53:48,149 - INFO - Tempo para criar índices: 0.10 segundos
+2026-04-21 13:53:48,149 - INFO - Processo de carga concluído em 0.87 segundos
+2026-04-21 13:53:48,149 - INFO - Processo 100 %% finalizado
+2026-04-21 13:53:53,882 - INFO - Variáveis de ambiente carregadas de: F:\Repositorio\00_Programacao\08-DADOS_RFB\DADOS_RFB\code\.env
+2026-04-21 13:53:53,883 - INFO - Diretório criado: D:\OPERACAO\OUTPUT_FILES
+2026-04-21 13:53:53,883 - INFO - Diretório criado: D:\OPERACAO\EXTRACTED_FILES
+2026-04-21 13:53:53,883 - INFO - Iniciando processo de carga de dados da RFB
+2026-04-21 13:53:53,883 - INFO - Obtendo lista de arquivos...
+2026-04-21 13:53:54,428 - INFO - Iniciando download dos arquivos...
+2026-04-21 13:53:54,428 - INFO - Extraindo arquivos...
+2026-04-21 13:53:54,428 - INFO - Categorizar arquivos...
+2026-04-21 13:53:54,428 - INFO - Processando dados...
+2026-04-21 13:53:54,518 - INFO - package: mysql.connector.plugins
+2026-04-21 13:53:54,518 - INFO - plugin_name: mysql_native_password
+2026-04-21 13:53:54,520 - INFO - AUTHENTICATION_PLUGIN_CLASS: MySQLNativePasswordAuthPlugin
+2026-04-21 13:53:54,521 - INFO - package: mysql.connector.plugins
+2026-04-21 13:53:54,521 - INFO - plugin_name: caching_sha2_password
+2026-04-21 13:53:54,521 - INFO - AUTHENTICATION_PLUGIN_CLASS: MySQLCachingSHA2PasswordAuthPlugin
+2026-04-21 13:53:54,522 - INFO - Conexão com o banco de dados estabelecida com sucesso
+2026-04-21 13:53:54,522 - INFO - Versão do banco: 8.0.44
+2026-04-21 13:53:54,524 - INFO - Conexão com o banco fechada
+2026-04-21 13:53:54,524 - INFO - Tempo de processamento: 0.10 segundos
+2026-04-21 13:53:54,524 - INFO - Criando índices...
+2026-04-21 13:53:54,607 - INFO - Conexão com o banco de dados estabelecida com sucesso
+2026-04-21 13:53:54,607 - INFO - Versão do banco: 8.0.44
+2026-04-21 13:53:54,607 - INFO - Criando índice: CREATE INDEX idx_estabelecimento_uf ON estabelecimento(uf)
+2026-04-21 13:53:54,609 - WARNING - Não foi possível criar índices CREATE INDEX idx_estabelecimento_uf ON estabelecimento(uf): 1061 (42000): Duplicate key name 'idx_estabelecimento_uf'
+2026-04-21 13:53:54,609 - INFO - Criando índice: CREATE INDEX idx_establecimento_municipio ON estabelecimento(municipio)
+2026-04-21 13:53:54,610 - WARNING - Não foi possível criar índices CREATE INDEX idx_establecimento_municipio ON estabelecimento(municipio): 1061 (42000): Duplicate key name 'idx_establecimento_municipio'
+2026-04-21 13:53:54,610 - INFO - Criando índice: CREATE INDEX idx_establecimento_cnae ON estabelecimento(cnae_fiscal_principal)
+2026-04-21 13:53:54,611 - WARNING - Não foi possível criar índices CREATE INDEX idx_establecimento_cnae ON estabelecimento(cnae_fiscal_principal): 1061 (42000): Duplicate key name 'idx_establecimento_cnae'
+2026-04-21 13:53:54,611 - INFO - Criando índice: CREATE INDEX idx_empresa_natureza ON empresa(natureza_juridica)
+2026-04-21 13:53:54,612 - WARNING - Não foi possível criar índices CREATE INDEX idx_empresa_natureza ON empresa(natureza_juridica): 1061 (42000): Duplicate key name 'idx_empresa_natureza'
+2026-04-21 13:53:54,612 - INFO - Criando índice: CREATE INDEX idx_socios_cpf ON socios(cpf_cnpj_socio)
+2026-04-21 13:53:54,613 - WARNING - Não foi possível criar índices CREATE INDEX idx_socios_cpf ON socios(cpf_cnpj_socio): 1061 (42000): Duplicate key name 'idx_socios_cpf'
+2026-04-21 13:53:54,613 - INFO - Tempo para criar índices: 0.09 segundos
+2026-04-21 13:53:54,613 - INFO - Processo de carga concluído em 0.73 segundos
+2026-04-21 13:53:54,613 - INFO - Processo 100 %% finalizado
+2026-04-21 13:58:14,015 - INFO - Variáveis de ambiente carregadas de: F:\Repositorio\00_Programacao\08-DADOS_RFB\DADOS_RFB\code\.env
+2026-04-21 13:58:14,016 - INFO - Diretório criado: D:\OPERACAO\OUTPUT_FILES
+2026-04-21 13:58:14,016 - INFO - Diretório criado: D:\OPERACAO\EXTRACTED_FILES
+2026-04-21 13:58:14,016 - INFO - Iniciando processo de carga de dados da RFB
+2026-04-21 13:58:14,016 - INFO - Obtendo lista de arquivos...
+2026-04-21 13:58:14,578 - INFO - Iniciando download dos arquivos...
+2026-04-21 13:58:14,578 - INFO - Extraindo arquivos...
+2026-04-21 13:58:14,578 - INFO - Categorizar arquivos...
+2026-04-21 13:58:14,578 - INFO - Processando dados...
+2026-04-21 13:58:14,668 - INFO - package: mysql.connector.plugins
+2026-04-21 13:58:14,668 - INFO - plugin_name: mysql_native_password
+2026-04-21 13:58:14,669 - INFO - AUTHENTICATION_PLUGIN_CLASS: MySQLNativePasswordAuthPlugin
+2026-04-21 13:58:14,669 - INFO - package: mysql.connector.plugins
+2026-04-21 13:58:14,669 - INFO - plugin_name: caching_sha2_password
+2026-04-21 13:58:14,669 - INFO - AUTHENTICATION_PLUGIN_CLASS: MySQLCachingSHA2PasswordAuthPlugin
+2026-04-21 13:58:14,671 - INFO - Conexão com o banco de dados estabelecida com sucesso
+2026-04-21 13:58:14,671 - INFO - Versão do banco: 8.0.44
+2026-04-21 13:58:14,673 - INFO - Conexão com o banco fechada
+2026-04-21 13:58:14,673 - INFO - Tempo de processamento: 0.09 segundos
+2026-04-21 13:58:14,673 - INFO - Criando índices...
+2026-04-21 13:58:14,762 - INFO - Conexão com o banco de dados estabelecida com sucesso
+2026-04-21 13:58:14,762 - INFO - Versão do banco: 8.0.44
+2026-04-21 13:58:14,762 - INFO - Criando índice: CREATE INDEX idx_estabelecimento_uf ON estabelecimento(uf)
+2026-04-21 13:58:14,764 - WARNING - Não foi possível criar índices CREATE INDEX idx_estabelecimento_uf ON estabelecimento(uf): 1061 (42000): Duplicate key name 'idx_estabelecimento_uf'
+2026-04-21 13:58:14,764 - INFO - Criando índice: CREATE INDEX idx_establecimento_municipio ON estabelecimento(municipio)
+2026-04-21 13:58:14,765 - WARNING - Não foi possível criar índices CREATE INDEX idx_establecimento_municipio ON estabelecimento(municipio): 1061 (42000): Duplicate key name 'idx_establecimento_municipio'
+2026-04-21 13:58:14,765 - INFO - Criando índice: CREATE INDEX idx_establecimento_cnae ON estabelecimento(cnae_fiscal_principal)
+2026-04-21 13:58:14,766 - WARNING - Não foi possível criar índices CREATE INDEX idx_establecimento_cnae ON estabelecimento(cnae_fiscal_principal): 1061 (42000): Duplicate key name 'idx_establecimento_cnae'
+2026-04-21 13:58:14,766 - INFO - Criando índice: CREATE INDEX idx_empresa_natureza ON empresa(natureza_juridica)
+2026-04-21 13:58:14,767 - WARNING - Não foi possível criar índices CREATE INDEX idx_empresa_natureza ON empresa(natureza_juridica): 1061 (42000): Duplicate key name 'idx_empresa_natureza'
+2026-04-21 13:58:14,767 - INFO - Criando índice: CREATE INDEX idx_socios_cpf ON socios(cpf_cnpj_socio)
+2026-04-21 13:58:14,768 - WARNING - Não foi possível criar índices CREATE INDEX idx_socios_cpf ON socios(cpf_cnpj_socio): 1061 (42000): Duplicate key name 'idx_socios_cpf'
+2026-04-21 13:58:14,768 - INFO - Tempo para criar índices: 0.10 segundos
+2026-04-21 13:58:14,768 - INFO - Processo de carga concluído em 0.75 segundos
+2026-04-21 13:58:14,768 - INFO - Processo 100 %% finalizado
+2026-04-21 14:29:34,650 - INFO - Variáveis de ambiente carregadas de: F:\Repositorio\00_Programacao\08-DADOS_RFB\DADOS_RFB\code\.env
+2026-04-21 14:29:34,651 - INFO - Diretório criado: D:\OPERACAO\OUTPUT_FILES
+2026-04-21 14:29:34,651 - INFO - Diretório criado: D:\OPERACAO\EXTRACTED_FILES
+2026-04-21 14:29:34,651 - INFO - Iniciando processo de carga de dados da RFB
+2026-04-21 14:29:34,651 - INFO - Obtendo lista de arquivos...
+2026-04-21 14:29:35,244 - INFO - Iniciando download dos arquivos...
+2026-04-21 14:29:35,244 - INFO - Extraindo arquivos...
+2026-04-21 14:29:35,244 - INFO - Categorizar arquivos...
+2026-04-21 14:29:35,245 - INFO - Processando dados...
+2026-04-21 14:29:35,350 - INFO - package: mysql.connector.plugins
+2026-04-21 14:29:35,350 - INFO - plugin_name: mysql_native_password
+2026-04-21 14:29:35,351 - INFO - AUTHENTICATION_PLUGIN_CLASS: MySQLNativePasswordAuthPlugin
+2026-04-21 14:29:35,351 - INFO - package: mysql.connector.plugins
+2026-04-21 14:29:35,351 - INFO - plugin_name: caching_sha2_password
+2026-04-21 14:29:35,351 - INFO - AUTHENTICATION_PLUGIN_CLASS: MySQLCachingSHA2PasswordAuthPlugin
+2026-04-21 14:29:35,353 - INFO - Conexão com o banco de dados estabelecida com sucesso
+2026-04-21 14:29:35,353 - INFO - Versão do banco: 8.0.44
+2026-04-21 14:29:35,355 - INFO - Conexão com o banco fechada
+2026-04-21 14:29:35,355 - INFO - Tempo de processamento: 0.11 segundos
+2026-04-21 14:29:35,355 - INFO - Criando índices...
+2026-04-21 14:29:35,431 - INFO - Conexão com o banco de dados estabelecida com sucesso
+2026-04-21 14:29:35,432 - INFO - Versão do banco: 8.0.44
+2026-04-21 14:29:35,432 - INFO - Criando índice: CREATE INDEX idx_estabelecimento_uf ON estabelecimento(uf)
+2026-04-21 14:29:35,437 - WARNING - Não foi possível criar índices CREATE INDEX idx_estabelecimento_uf ON estabelecimento(uf): 1061 (42000): Duplicate key name 'idx_estabelecimento_uf'
+2026-04-21 14:29:35,437 - INFO - Criando índice: CREATE INDEX idx_establecimento_municipio ON estabelecimento(municipio)
+2026-04-21 14:29:35,438 - WARNING - Não foi possível criar índices CREATE INDEX idx_establecimento_municipio ON estabelecimento(municipio): 1061 (42000): Duplicate key name 'idx_establecimento_municipio'
+2026-04-21 14:29:35,438 - INFO - Criando índice: CREATE INDEX idx_establecimento_cnae ON estabelecimento(cnae_fiscal_principal)
+2026-04-21 14:29:35,439 - WARNING - Não foi possível criar índices CREATE INDEX idx_establecimento_cnae ON estabelecimento(cnae_fiscal_principal): 1061 (42000): Duplicate key name 'idx_establecimento_cnae'
+2026-04-21 14:29:35,439 - INFO - Criando índice: CREATE INDEX idx_empresa_natureza ON empresa(natureza_juridica)
+2026-04-21 14:29:35,440 - WARNING - Não foi possível criar índices CREATE INDEX idx_empresa_natureza ON empresa(natureza_juridica): 1061 (42000): Duplicate key name 'idx_empresa_natureza'
+2026-04-21 14:29:35,440 - INFO - Criando índice: CREATE INDEX idx_socios_cpf ON socios(cpf_cnpj_socio)
+2026-04-21 14:29:35,441 - WARNING - Não foi possível criar índices CREATE INDEX idx_socios_cpf ON socios(cpf_cnpj_socio): 1061 (42000): Duplicate key name 'idx_socios_cpf'
+2026-04-21 14:29:35,441 - INFO - Tempo para criar índices: 0.09 segundos
+2026-04-21 14:29:35,441 - INFO - Processo de carga concluído em 0.79 segundos
+2026-04-21 14:29:35,442 - INFO - Processo 100 %% finalizado
+2026-04-21 14:31:49,461 - INFO - Variáveis de ambiente carregadas de: F:\Repositorio\00_Programacao\08-DADOS_RFB\DADOS_RFB\code\.env
+2026-04-21 14:31:49,461 - INFO - Diretório criado: D:\OPERACAO\OUTPUT_FILES
+2026-04-21 14:31:49,461 - INFO - Diretório criado: D:\OPERACAO\EXTRACTED_FILES
+2026-04-21 14:31:49,461 - INFO - Iniciando processo de carga de dados da RFB
+2026-04-21 14:31:49,462 - INFO - Obtendo lista de arquivos...
+2026-04-21 14:31:49,976 - INFO - Iniciando download dos arquivos...
+2026-04-21 14:31:49,976 - INFO - Extraindo arquivos...
+2026-04-21 14:31:49,976 - INFO - Categorizar arquivos...
+2026-04-21 14:31:49,976 - INFO - Processando dados...
+2026-04-21 14:31:50,075 - INFO - package: mysql.connector.plugins
+2026-04-21 14:31:50,075 - INFO - plugin_name: mysql_native_password
+2026-04-21 14:31:50,076 - INFO - AUTHENTICATION_PLUGIN_CLASS: MySQLNativePasswordAuthPlugin
+2026-04-21 14:31:50,077 - INFO - package: mysql.connector.plugins
+2026-04-21 14:31:50,077 - INFO - plugin_name: caching_sha2_password
+2026-04-21 14:31:50,077 - INFO - AUTHENTICATION_PLUGIN_CLASS: MySQLCachingSHA2PasswordAuthPlugin
+2026-04-21 14:31:50,078 - INFO - Conexão com o banco de dados estabelecida com sucesso
+2026-04-21 14:31:50,078 - INFO - Versão do banco: 8.0.44
+2026-04-21 14:31:50,080 - INFO - Conexão com o banco fechada
+2026-04-21 14:31:50,081 - INFO - Tempo de processamento: 0.10 segundos
+2026-04-21 14:31:50,081 - INFO - Criando índices...
+2026-04-21 14:31:50,143 - INFO - Conexão com o banco de dados estabelecida com sucesso
+2026-04-21 14:31:50,143 - INFO - Versão do banco: 8.0.44
+2026-04-21 14:31:50,144 - INFO - Criando índice: CREATE INDEX idx_estabelecimento_uf ON estabelecimento(uf)
+2026-04-21 14:31:50,149 - WARNING - Não foi possível criar índices CREATE INDEX idx_estabelecimento_uf ON estabelecimento(uf): 1061 (42000): Duplicate key name 'idx_estabelecimento_uf'
+2026-04-21 14:31:50,149 - INFO - Criando índice: CREATE INDEX idx_establecimento_municipio ON estabelecimento(municipio)
+2026-04-21 14:31:50,150 - WARNING - Não foi possível criar índices CREATE INDEX idx_establecimento_municipio ON estabelecimento(municipio): 1061 (42000): Duplicate key name 'idx_establecimento_municipio'
+2026-04-21 14:31:50,150 - INFO - Criando índice: CREATE INDEX idx_establecimento_cnae ON estabelecimento(cnae_fiscal_principal)
+2026-04-21 14:31:50,151 - WARNING - Não foi possível criar índices CREATE INDEX idx_establecimento_cnae ON estabelecimento(cnae_fiscal_principal): 1061 (42000): Duplicate key name 'idx_establecimento_cnae'
+2026-04-21 14:31:50,151 - INFO - Criando índice: CREATE INDEX idx_empresa_natureza ON empresa(natureza_juridica)
+2026-04-21 14:31:50,152 - WARNING - Não foi possível criar índices CREATE INDEX idx_empresa_natureza ON empresa(natureza_juridica): 1061 (42000): Duplicate key name 'idx_empresa_natureza'
+2026-04-21 14:31:50,152 - INFO - Criando índice: CREATE INDEX idx_socios_cpf ON socios(cpf_cnpj_socio)
+2026-04-21 14:31:50,153 - WARNING - Não foi possível criar índices CREATE INDEX idx_socios_cpf ON socios(cpf_cnpj_socio): 1061 (42000): Duplicate key name 'idx_socios_cpf'
+2026-04-21 14:31:50,153 - INFO - Tempo para criar índices: 0.07 segundos
+2026-04-21 14:31:50,153 - INFO - Processo de carga concluído em 0.69 segundos
+2026-04-21 14:31:50,154 - INFO - Processo 100 %% finalizado
+2026-04-21 14:32:15,625 - INFO - Variáveis de ambiente carregadas de: F:\Repositorio\00_Programacao\08-DADOS_RFB\DADOS_RFB\code\.env
+2026-04-21 14:32:15,626 - INFO - Diretório criado: D:\OPERACAO\OUTPUT_FILES
+2026-04-21 14:32:15,626 - INFO - Diretório criado: D:\OPERACAO\EXTRACTED_FILES
+2026-04-21 14:32:15,626 - INFO - Iniciando processo de carga de dados da RFB
+2026-04-21 14:32:15,626 - INFO - Obtendo lista de arquivos...
+2026-04-21 14:32:16,139 - INFO - Iniciando download dos arquivos...
+2026-04-21 14:32:16,140 - INFO - Extraindo arquivos...
+2026-04-21 14:32:16,140 - INFO - Categorizar arquivos...
+2026-04-21 14:32:16,140 - INFO - Processando dados...
+2026-04-21 14:32:16,243 - INFO - package: mysql.connector.plugins
+2026-04-21 14:32:16,244 - INFO - plugin_name: mysql_native_password
+2026-04-21 14:32:16,244 - INFO - AUTHENTICATION_PLUGIN_CLASS: MySQLNativePasswordAuthPlugin
+2026-04-21 14:32:16,245 - INFO - package: mysql.connector.plugins
+2026-04-21 14:32:16,245 - INFO - plugin_name: caching_sha2_password
+2026-04-21 14:32:16,245 - INFO - AUTHENTICATION_PLUGIN_CLASS: MySQLCachingSHA2PasswordAuthPlugin
+2026-04-21 14:32:16,246 - INFO - Conexão com o banco de dados estabelecida com sucesso
+2026-04-21 14:32:16,247 - INFO - Versão do banco: 8.0.44
+2026-04-21 14:32:16,254 - INFO - Conexão com o banco fechada
+2026-04-21 14:32:16,254 - INFO - Tempo de processamento: 0.11 segundos
+2026-04-21 14:32:16,254 - INFO - Criando índices...
+2026-04-21 14:32:16,339 - INFO - Conexão com o banco de dados estabelecida com sucesso
+2026-04-21 14:32:16,339 - INFO - Versão do banco: 8.0.44
+2026-04-21 14:32:16,339 - INFO - Criando índice: CREATE INDEX idx_estabelecimento_uf ON estabelecimento(uf)
+2026-04-21 14:32:16,341 - WARNING - Não foi possível criar índices CREATE INDEX idx_estabelecimento_uf ON estabelecimento(uf): 1061 (42000): Duplicate key name 'idx_estabelecimento_uf'
+2026-04-21 14:32:16,341 - INFO - Criando índice: CREATE INDEX idx_establecimento_municipio ON estabelecimento(municipio)
+2026-04-21 14:32:16,342 - WARNING - Não foi possível criar índices CREATE INDEX idx_establecimento_municipio ON estabelecimento(municipio): 1061 (42000): Duplicate key name 'idx_establecimento_municipio'
+2026-04-21 14:32:16,342 - INFO - Criando índice: CREATE INDEX idx_establecimento_cnae ON estabelecimento(cnae_fiscal_principal)
+2026-04-21 14:32:16,342 - WARNING - Não foi possível criar índices CREATE INDEX idx_establecimento_cnae ON estabelecimento(cnae_fiscal_principal): 1061 (42000): Duplicate key name 'idx_establecimento_cnae'
+2026-04-21 14:32:16,343 - INFO - Criando índice: CREATE INDEX idx_empresa_natureza ON empresa(natureza_juridica)
+2026-04-21 14:32:16,343 - WARNING - Não foi possível criar índices CREATE INDEX idx_empresa_natureza ON empresa(natureza_juridica): 1061 (42000): Duplicate key name 'idx_empresa_natureza'
+2026-04-21 14:32:16,343 - INFO - Criando índice: CREATE INDEX idx_socios_cpf ON socios(cpf_cnpj_socio)
+2026-04-21 14:32:16,344 - WARNING - Não foi possível criar índices CREATE INDEX idx_socios_cpf ON socios(cpf_cnpj_socio): 1061 (42000): Duplicate key name 'idx_socios_cpf'
+2026-04-21 14:32:16,345 - INFO - Tempo para criar índices: 0.09 segundos
+2026-04-21 14:32:16,345 - INFO - Processo de carga concluído em 0.72 segundos
+2026-04-21 14:32:16,345 - INFO - Processo 100 %% finalizado
+2026-04-21 14:34:07,486 - INFO - Variáveis de ambiente carregadas de: F:\Repositorio\00_Programacao\08-DADOS_RFB\DADOS_RFB\code\.env
+2026-04-21 14:34:07,487 - INFO - Diretório criado: D:\OPERACAO\OUTPUT_FILES
+2026-04-21 14:34:07,487 - INFO - Diretório criado: D:\OPERACAO\EXTRACTED_FILES
+2026-04-21 14:34:07,487 - INFO - Iniciando processo de carga de dados da RFB
+2026-04-21 14:34:07,487 - INFO - Obtendo lista de arquivos...
+2026-04-21 14:34:08,025 - INFO - Iniciando download dos arquivos...
+2026-04-21 14:34:08,025 - INFO - Extraindo arquivos...
+2026-04-21 14:34:08,026 - INFO - Categorizar arquivos...
+2026-04-21 14:34:08,026 - INFO - Processando dados...
+2026-04-21 14:34:08,132 - INFO - package: mysql.connector.plugins
+2026-04-21 14:34:08,132 - INFO - plugin_name: mysql_native_password
+2026-04-21 14:34:08,133 - INFO - AUTHENTICATION_PLUGIN_CLASS: MySQLNativePasswordAuthPlugin
+2026-04-21 14:34:08,134 - INFO - package: mysql.connector.plugins
+2026-04-21 14:34:08,134 - INFO - plugin_name: caching_sha2_password
+2026-04-21 14:34:08,134 - INFO - AUTHENTICATION_PLUGIN_CLASS: MySQLCachingSHA2PasswordAuthPlugin
+2026-04-21 14:34:08,135 - INFO - Conexão com o banco de dados estabelecida com sucesso
+2026-04-21 14:34:08,135 - INFO - Versão do banco: 8.0.44
+2026-04-21 14:34:08,137 - INFO - Conexão com o banco fechada
+2026-04-21 14:34:08,137 - INFO - Tempo de processamento: 0.11 segundos
+2026-04-21 14:34:08,137 - INFO - Criando índices...
+2026-04-21 14:34:08,225 - INFO - Conexão com o banco de dados estabelecida com sucesso
+2026-04-21 14:34:08,225 - INFO - Versão do banco: 8.0.44
+2026-04-21 14:34:08,225 - INFO - Criando índice: CREATE INDEX idx_estabelecimento_uf ON estabelecimento(uf)
+2026-04-21 14:34:08,406 - WARNING - Não foi possível criar índices CREATE INDEX idx_estabelecimento_uf ON estabelecimento(uf): 1061 (42000): Duplicate key name 'idx_estabelecimento_uf'
+2026-04-21 14:34:08,406 - INFO - Criando índice: CREATE INDEX idx_establecimento_municipio ON estabelecimento(municipio)
+2026-04-21 14:34:08,407 - WARNING - Não foi possível criar índices CREATE INDEX idx_establecimento_municipio ON estabelecimento(municipio): 1061 (42000): Duplicate key name 'idx_establecimento_municipio'
+2026-04-21 14:34:08,407 - INFO - Criando índice: CREATE INDEX idx_establecimento_cnae ON estabelecimento(cnae_fiscal_principal)
+2026-04-21 14:34:08,408 - WARNING - Não foi possível criar índices CREATE INDEX idx_establecimento_cnae ON estabelecimento(cnae_fiscal_principal): 1061 (42000): Duplicate key name 'idx_establecimento_cnae'
+2026-04-21 14:34:08,408 - INFO - Criando índice: CREATE INDEX idx_empresa_natureza ON empresa(natureza_juridica)
+2026-04-21 14:34:08,409 - WARNING - Não foi possível criar índices CREATE INDEX idx_empresa_natureza ON empresa(natureza_juridica): 1061 (42000): Duplicate key name 'idx_empresa_natureza'
+2026-04-21 14:34:08,409 - INFO - Criando índice: CREATE INDEX idx_socios_cpf ON socios(cpf_cnpj_socio)
+2026-04-21 14:34:08,410 - WARNING - Não foi possível criar índices CREATE INDEX idx_socios_cpf ON socios(cpf_cnpj_socio): 1061 (42000): Duplicate key name 'idx_socios_cpf'
+2026-04-21 14:34:08,411 - INFO - Tempo para criar índices: 0.27 segundos
+2026-04-21 14:34:08,411 - INFO - Processo de carga concluído em 0.92 segundos
+2026-04-21 14:34:08,411 - INFO - Processo 100 %% finalizado
+2026-04-21 14:43:52,951 - INFO - Variáveis de ambiente carregadas de: F:\Repositorio\00_Programacao\08-DADOS_RFB\DADOS_RFB\code\.env
+2026-04-21 14:43:52,951 - INFO - Diretório criado: D:\OPERACAO\OUTPUT_FILES
+2026-04-21 14:43:52,951 - INFO - Diretório criado: D:\OPERACAO\EXTRACTED_FILES
+2026-04-21 14:43:52,951 - INFO - Iniciando processo de carga de dados da RFB
+2026-04-21 14:43:52,951 - INFO - Obtendo lista de arquivos...
+2026-04-21 14:43:53,497 - INFO - Iniciando download dos arquivos...
+2026-04-21 14:43:53,498 - INFO - Extraindo arquivos...
+2026-04-21 14:43:53,498 - INFO - Categorizar arquivos...
+2026-04-21 14:43:53,498 - INFO - Processando dados...
+2026-04-21 14:43:53,514 - ERROR - Erro ao conectar ao banco de dados (tentativa 1): Authentication plugin 'caching_sha2_password' is not supported
+2026-04-21 14:43:53,514 - INFO - Tentando reconectar em 5 segundos...
+2026-04-21 14:43:58,538 - ERROR - Erro ao conectar ao banco de dados (tentativa 2): Authentication plugin 'caching_sha2_password' is not supported
+2026-04-21 14:43:58,538 - INFO - Tentando reconectar em 5 segundos...
+2026-04-21 14:44:03,562 - ERROR - Erro ao conectar ao banco de dados (tentativa 3): Authentication plugin 'caching_sha2_password' is not supported
+2026-04-21 14:44:03,562 - ERROR - Erro no processamento geral: Authentication plugin 'caching_sha2_password' is not supported
+2026-04-21 14:44:03,563 - ERROR - Erro durante execução: Authentication plugin 'caching_sha2_password' is not supported
