@@ -69,4 +69,4 @@ pip install -r requirements.txt
 - Pelo volume de dados, as tabelas  `empresa`, `estabelecimento`, `socios` e `simples` possuem índices para a coluna `cnpj_basico`, que é a principal chave de ligação entre elas.
 
 ### Modelo de Entidade Relacionamento:
-![alt text](https://github.com/aphonsoar/Receita_Federal_do_Brasil_-_Dados_Publicos_CNPJ/blob/master/Dados_RFB_ERD.png)
+![alt text](https://github.com/vrelme/DADOS_RFB/blob/dev/Dados_RFB_ERD.png)
