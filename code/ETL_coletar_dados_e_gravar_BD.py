@@ -305,7 +305,7 @@ class RFBDataLoader:
             },
             'estabelecimento': {
                 'schema': """CREATE TABLE estabelecimento (
-                    cnpj_basico VARCHAR(14) PRIMARY KEY,
+                    cnpj_basico VARCHAR(14),
                     cnpj_ordem VARCHAR(4),
                     cnpj_dv VARCHAR(2),
                     identificador_matriz_filial INT,
@@ -359,7 +359,7 @@ class RFBDataLoader:
             },
             'socios': {
                     'schema': """CREATE TABLE socios (
-                        cnpj_basico VARCHAR(14) PRIMARY KEY,
+                        cnpj_basico VARCHAR(14),
                         identificador_socio INT,
                         nome_socio_razao_social VARCHAR(255),
                         cpf_cnpj_socio VARCHAR(14),
