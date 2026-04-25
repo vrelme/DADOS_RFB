@@ -116,3 +116,12 @@ venv/Scripts/pythonw.exe
 DADOS_RFB.log
 *.log
 DADOS_RFB.log
+venv/
+__pycache__/
+*.pyc
+.env
+.idea/
+.vscode/settings.json
+logs/
+dist/
+build/
