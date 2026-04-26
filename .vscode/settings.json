@@ -1,9 +1,3 @@
 {
-    "python.analysis.autoImportCompletions": false,
-    "python.analysis.typeCheckingMode": "off",
-    "cSpell.words": [
-        "dotenv"
-    ],
-    "python.REPL.enableREPLSmartSend": false,
-    "python-envs.defaultEnvManager": "ms-python.python:system"
+    "python-envs.defaultEnvManager": "ms-python.python:venv"
 }
