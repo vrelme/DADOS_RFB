@@ -1,5 +1,5 @@
 # Dados Públicos CNPJ
-- Fonte oficial da Receita Federal do Brasil, [aqui](https://arquivos.receitafederal.gov.br/dados/cnpj/dados_abertos_cnpj/).
+- Fonte oficial da Receita Federal do Brasil.
 - Layout dos arquivos, [aqui](https://www.gov.br/receitafederal/dados/cnpj-metadados.pdf).
 
 A Receita Federal do Brasil disponibiliza bases com os dados públicos do cadastro nacional de pessoas jurídicas (CNPJ). 
@@ -53,7 +53,7 @@ pip install -r requirements.txt
 ---------------------
 
 ### Tabelas geradas:
-- Para maiores informações, consulte o [layout](https://www.gov.br/receitafederal/pt-br/assuntos/orientacao-tributaria/cadastros/consultas/arquivos/NOVOLAYOUTDOSDADOSABERTOSDOCNPJ.pdf).
+- Para maiores informações, consulte o [layout](https://github.com/vrelme/DADOS_RFB/blob/dev/NOVOLAYOUTDOSDADOSABERTOSDOCNPJ.pdf).
   - `empresa`: dados cadastrais da empresa em nível de matriz
   - `estabelecimento`: dados analíticos da empresa por unidade / estabelecimento (telefones, endereço, filial, etc)
   - `socios`: dados cadastrais dos sócios das empresas
@@ -69,4 +69,7 @@ pip install -r requirements.txt
 - Pelo volume de dados, as tabelas  `empresa`, `estabelecimento`, `socios` e `simples` possuem índices para a coluna `cnpj_basico`, que é a principal chave de ligação entre elas.
 
 ### Modelo de Entidade Relacionamento:
-![alt text](https://github.com/aphonsoar/Receita_Federal_do_Brasil_-_Dados_Publicos_CNPJ/blob/master/Dados_RFB_ERD.png)
+![alt text](https://github.com/vrelme/DADOS_RFB/blob/dev/Dados_RFB_ERD.png)
+
+### Diagramas UML:
+![alt text](https://github.com/vrelme/DADOS_RFB/blob/dev/Diagramas_UML.png)
