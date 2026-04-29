@@ -1,15 +1,22 @@
 {
     "version": "0.2.0",
     "configurations": [
-        
         {
-            "name": "Rodar DADOS_RFB (main.py)",
+            "name": "RFB Loader Enterprise",
             "type": "python",
             "request": "launch",
-            "program": "${workspaceFolder}/code/ETL_coletar_dados_e_gravar_BD.py",
+            "module": "app.main",
             "console": "integratedTerminal",
-            "justMyCode": true
-            
+            "justMyCode": false,
+            "cwd": "${workspaceFolder}",
+            "envFile": "${workspaceFolder}/.env"
+        }
+        {
+            "name": "Pytest",
+            "type": "python",
+            "request": "launch",
+            "module": "pytest",
+            "console": "integratedTerminal"
         }
     ]
 }
