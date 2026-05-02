@@ -74,7 +74,7 @@ def run_etl(logger):
     """
     logger.info("Iniciando pipelines ETL...")
 
-    orchestrator = ETLOrchestrator(logger)
+    orchestrator = ETLOrchestrator()
     orchestrator.run()
 
 
