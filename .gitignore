@@ -1,118 +1,64 @@
-pyvenv.cfg
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+dist/
+build/
+
+# =========================
+# Virtual Environment
+# =========================
+venv/
+.venv/
+env/
+
+# =========================
+# IDE / Editor
+# =========================
+.vscode/*
+!.vscode/launch.json
+!.vscode/settings.json
+
+.idea/
+*.swp
+*.swo
+
+# =========================
+# Environment variables
+# =========================
+.env
+
+# =========================
+# Logs
+# =========================
+logs/
 *.log
-F.K03200$W.SIMPLES.CSV.D41109
-F.K03200$Z.D41109.CNAECSV
-K3241.K03200Y0.D41109.SOCIOCSV
-K3241.K03200Y1.D41109.EMPRECSV
-K3241.K03200Y0.D41109.ESTABELE
-K3241.K03200Y0.D41109.EMPRECSV
-F.K03200$Z.D41109.QUALSCSV
-F.K03200$Z.D41109.PAISCSV
-F.K03200$Z.D41109.NATJUCSV
-F.K03200$Z.D41109.MUNICCSV
-F.K03200$Z.D41109.MOTICSV
-K3241.K03200Y1.D41109.ESTABELE
-K3241.K03200Y1.D41109.SOCIOCSV
-K3241.K03200Y2.D41109.EMPRECSV
-K3241.K03200Y2.D41109.ESTABELE
-K3241.K03200Y2.D41109.SOCIOCSV
-K3241.K03200Y3.D41109.EMPRECSV
-K3241.K03200Y3.D41109.ESTABELE
-K3241.K03200Y3.D41109.SOCIOCSV
-K3241.K03200Y4.D41109.EMPRECSV
-K3241.K03200Y4.D41109.ESTABELE
-K3241.K03200Y4.D41109.SOCIOCSV
-K3241.K03200Y5.D41109.EMPRECSV
-K3241.K03200Y5.D41109.ESTABELE
-K3241.K03200Y5.D41109.SOCIOCSV
-K3241.K03200Y6.D41109.EMPRECSV
-K3241.K03200Y6.D41109.ESTABELE
-K3241.K03200Y6.D41109.SOCIOCSV
-K3241.K03200Y7.D41109.EMPRECSV
-K3241.K03200Y7.D41109.ESTABELE
-K3241.K03200Y7.D41109.SOCIOCSV
-K3241.K03200Y8.D41109.EMPRECSV
-K3241.K03200Y8.D41109.ESTABELE
-K3241.K03200Y8.D41109.SOCIOCSV
-K3241.K03200Y9.D41109.EMPRECSV
-K3241.K03200Y9.D41109.ESTABELE
-K3241.K03200Y9.D41109.SOCIOCSV
-DADOS_RFB.log
-Estabelecimentos0.zipd1b1t7zi.tmp
-Estabelecimentos4.zipho79gyri.tmp
-venv/pyvenv.cfg
-venv/pyvenv.cfg
-*.log
-.vscode/settings.json
-venv/pyvenv.cfg
-venv/Lib/site-packages/pip/__init__.py
-venv/Lib/site-packages/pip/_internal/build_env.py
-venv/Lib/site-packages/pip/_internal/exceptions.py
-venv/Lib/site-packages/pip/_internal/self_outdated_check.py
-venv/Lib/site-packages/pip/_internal/cli/base_command.py
-venv/Lib/site-packages/pip/_internal/cli/cmdoptions.py
-venv/Lib/site-packages/pip/_internal/cli/main_parser.py
-venv/Lib/site-packages/pip/_internal/cli/main.py
-venv/Lib/site-packages/pip/_internal/cli/parser.py
-venv/Lib/site-packages/pip/_internal/cli/progress_bars.py
-venv/Lib/site-packages/pip/_internal/cli/req_command.py
-venv/Lib/site-packages/pip/_internal/commands/cache.py
-venv/Lib/site-packages/pip/_internal/commands/completion.py
-venv/Lib/site-packages/pip/_internal/commands/download.py
-venv/Lib/site-packages/pip/_internal/commands/index.py
-venv/Lib/site-packages/pip/_internal/commands/install.py
-venv/Lib/site-packages/pip/_internal/commands/list.py
-venv/Lib/site-packages/pip/_internal/commands/wheel.py
-venv/Lib/site-packages/pip/_internal/index/collector.py
-venv/Lib/site-packages/pip/_internal/index/package_finder.py
-venv/Lib/site-packages/pip/_internal/locations/__init__.py
-venv/Lib/site-packages/pip/_internal/locations/_sysconfig.py
-venv/Lib/site-packages/pip/_internal/models/link.py
-venv/Lib/site-packages/pip/_internal/models/selection_prefs.py
-venv/Lib/site-packages/pip/_internal/network/auth.py
-venv/Lib/site-packages/pip/_internal/network/download.py
-venv/Lib/site-packages/pip/_internal/network/session.py
-venv/Lib/site-packages/pip/_internal/operations/prepare.py
-venv/Lib/site-packages/pip/_internal/operations/install/wheel.py
-venv/Lib/site-packages/pip/_internal/req/constructors.py
-venv/Lib/site-packages/pip/_internal/req/req_file.py
-venv/Lib/site-packages/pip/_internal/resolution/resolvelib/factory.py
-venv/Lib/site-packages/pip/_internal/resolution/resolvelib/requirements.py
-venv/Lib/site-packages/pip/_internal/utils/datetime.py
-venv/Lib/site-packages/pip/_internal/utils/filesystem.py
-venv/Lib/site-packages/pip/_internal/utils/logging.py
-venv/Lib/site-packages/pip/_internal/utils/misc.py
-venv/Lib/site-packages/pip/_internal/utils/unpacking.py
-venv/Lib/site-packages/pip/_internal/vcs/versioncontrol.py
-venv/Lib/site-packages/pip/_vendor/vendor.txt
-venv/Lib/site-packages/pip/_vendor/cachecontrol/__init__.py
-venv/Lib/site-packages/pip/_vendor/cachecontrol/adapter.py
-venv/Lib/site-packages/pip/_vendor/cachecontrol/controller.py
-venv/Lib/site-packages/pip/_vendor/cachecontrol/filewrapper.py
-venv/Lib/site-packages/pip/_vendor/certifi/__init__.py
-venv/Lib/site-packages/pip/_vendor/certifi/cacert.pem
-venv/Lib/site-packages/pip/_vendor/idna/codec.py
-venv/Lib/site-packages/pip/_vendor/idna/core.py
-venv/Lib/site-packages/pip/_vendor/idna/idnadata.py
-venv/Lib/site-packages/pip/_vendor/idna/package_data.py
-venv/Lib/site-packages/pip/_vendor/idna/uts46data.py
-venv/Lib/site-packages/pip/_vendor/packaging/__init__.py
-venv/Lib/site-packages/pip/_vendor/packaging/_manylinux.py
-venv/Lib/site-packages/pip/_vendor/packaging/_musllinux.py
-venv/Lib/site-packages/pip/_vendor/packaging/_structures.py
-venv/Lib/site-packages/pip/_vendor/packaging/markers.py
-venv/Lib/site-packages/pip/_vendor/packaging/requirements.py
-venv/Lib/site-packages/pip/_vendor/packaging/specifiers.py
-venv/Lib/site-packages/pip/_vendor/packaging/tags.py
-venv/Lib/site-packages/pip/_vendor/packaging/utils.py
-venv/Lib/site-packages/pip/_vendor/packaging/version.py
-venv/Lib/site-packages/pip/_vendor/platformdirs/version.py
-venv/Lib/site-packages/pip/_vendor/platformdirs/windows.py
-venv/Scripts/Activate.ps1
-venv/Scripts/pip.exe
-venv/Scripts/pip3.exe
-venv/Scripts/python.exe
-venv/Scripts/pythonw.exe
-DADOS_RFB.log
-*.log
-DADOS_RFB.log
+
+# =========================
+# Runtime files
+# =========================
+*.pid
+*.tmp
+*.bak
+
+# =========================
+# Data files
+# =========================
+data/extracted/
+data/temp/
+data/output/
+
+# manter input se quiser versionar estrutura
+# data/input/*
+
+# =========================
+# OS files
+# =========================
+Thumbs.db
+.DS_Store
+
