@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.dialects.mysql import insert
 import logging
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -12,39 +13,84 @@ class BulkRepository:
         self.db = db
 
     # =====================================================
-    # INSERT EM LOTE (ROBUSTO)
+    # BULK INSERT ENTERPRISE
     # =====================================================
-    def bulk_insert(self, model, data: list):
+    def bulk_insert(self, model, data: list, retries=3):
         """
-        Insert em lote com tolerância a duplicados (INSERT IGNORE)
-        Ideal para carga RFB (dados massivos e repetidos)
+        Insert em lote robusto com:
+        - IGNORE duplicados
+        - Retry automático
+        - Fallback em erro
         """
 
         if not data:
-            logger.debug("Nenhum dado para inserir (lista vazia)")
-            return
+            logger.debug("Nenhum dado para inserir")
+            return 0
 
-        try:
-            stmt = insert(model).values(data)
+        for attempt in range(1, retries + 1):
 
-            # 🔥 IGNORA DUPLICADOS (ESSENCIAL)
-            stmt = stmt.prefix_with("IGNORE")
+            try:
+                stmt = insert(model).values(data)
 
-            result = self.db.execute(stmt)
-            self.db.commit()
+                # 🔥 IGNORE duplicados
+                stmt = stmt.prefix_with("IGNORE")
 
-            logger.info(
-                f"{model.__tablename__}: {len(data)} registros processados"
-            )
+                result = self.db.execute(stmt)
+                self.db.commit()
 
-            return result
+                inserted = result.rowcount
 
-        except SQLAlchemyError as e:
-            self.db.rollback()
+                logger.info(
+                    f"{model.__tablename__}: "
+                    f"{inserted}/{len(data)} inseridos (duplicates ignorados)"
+                )
 
-            logger.error(
-                f"Erro no bulk insert ({model.__tablename__}): {e}",
-                exc_info=True
-            )
+                return inserted
 
-            raise
+            except SQLAlchemyError as e:
+
+                self.db.rollback()
+
+                logger.warning(
+                    f"Tentativa {attempt}/{retries} falhou: {e}"
+                )
+
+                # última tentativa → fallback
+                if attempt == retries:
+                    logger.error(
+                        f"Falha definitiva no lote. Aplicando fallback..."
+                    )
+
+                    return self._fallback_insert(model, data)
+
+                time.sleep(2)
+
+    # =====================================================
+    # FALLBACK (linha a linha)
+    # =====================================================
+    def _fallback_insert(self, model, data: list):
+        """
+        Quando o batch falha:
+        tenta inserir linha por linha
+        """
+
+        success = 0
+
+        for row in data:
+            try:
+                stmt = insert(model).values(**row)
+                stmt = stmt.prefix_with("IGNORE")
+
+                self.db.execute(stmt)
+                success += 1
+
+            except Exception as e:
+                logger.error(f"Registro inválido ignorado: {row} | erro: {e}")
+
+        self.db.commit()
+
+        logger.warning(
+            f"Fallback concluído: {success}/{len(data)} inseridos"
+        )
+
+        return success

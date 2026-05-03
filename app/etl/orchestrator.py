@@ -1,229 +1,141 @@
+import pandas as pd
+import numpy as np
 import logging
-from pathlib import Path
 import time
 
 from app.database import SessionLocal
-from app.config import Settings
-
-from app.etl.loader import CSVLoader
 from app.etl.transformer import DataTransformer
 from app.etl.validator import Validator
 from app.etl.bulk_repository import BulkRepository
+from app.etl.deduplicator import Deduplicator
 
-from app.models import Empresa, Estabelecimento, Socio
+logger = logging.getLogger(__name__)
 
 
 class ETLOrchestrator:
 
-    def __init__(self):
-        self.logger = logging.getLogger(__name__)
+    def __init__(self, logger_instance=None):
+        self.logger = logger_instance or logger
 
-        self.loader = CSVLoader()
         self.transformer = DataTransformer()
         self.validator = Validator()
+        self.deduplicator = Deduplicator()
 
-    # =====================================================
-    # ENTRYPOINT
-    # =====================================================
-    def run(self):
-        start = time.time()
+    # =========================
+    # EXECUÇÃO PRINCIPAL
+    # =========================
+    def run(self, file_path, model, columns, key):
 
-        self.logger.info("=" * 70)
-        self.logger.info("INICIANDO ETL RFB")
-        self.logger.info("=" * 70)
+        start_total = time.time()
 
-        files = sorted(Path(Settings.INPUT_DIR).glob("*"))
-
-        if not files:
-            self.logger.warning("Nenhum arquivo encontrado")
-            return
-
-        for file_path in files:
-            try:
-                self._dispatch(file_path)
-            except Exception as e:
-                self.logger.exception(f"Falha no arquivo {file_path.name}: {e}")
-
-        elapsed = time.time() - start
-
-        self.logger.info("=" * 70)
-        self.logger.info(f"ETL FINALIZADO em {elapsed:.2f}s")
-        self.logger.info("=" * 70)
-
-    # =====================================================
-    # ROUTER
-    # =====================================================
-    def _dispatch(self, file_path: Path):
-
-        name = file_path.name.upper()
-
-        if "EMPRE" in name:
-            self._process_empresa(file_path)
-
-        elif "ESTABELE" in name:
-            self._process_estabelecimento(file_path)
-
-        elif "SOCIO" in name:
-            self._process_socio(file_path)
-
-        else:
-            self.logger.warning(f"Arquivo ignorado: {name}")
-
-    # =====================================================
-    # EMPRESA
-    # =====================================================
-    def _process_empresa(self, file_path):
-
-        columns = [
-            "cnpj_basico",
-            "razao_social",
-            "natureza_juridica",
-            "qualificacao_responsavel",
-            "capital_social",
-            "porte_empresa",
-            "ente_federativo"
-        ]
-
-        self._execute_pipeline(
-            model=Empresa,
-            file_path=file_path,
-            columns=columns,
-            validator_func=self.validator.validate_empresa
-        )
-
-    # =====================================================
-    # ESTABELECIMENTO
-    # =====================================================
-    def _process_estabelecimento(self, file_path):
-
-        columns = [
-            "cnpj_basico",
-            "cnpj_ordem",
-            "cnpj_dv",
-            "identificador_matriz_filial",
-            "nome_fantasia",
-            "situacao_cadastral",
-            "data_situacao_cadastral",
-            "motivo_situacao_cadastral",
-            "nome_cidade_exterior",
-            "pais",
-            "data_inicio_atividade",
-            "cnae_fiscal_principal",
-            "cnae_fiscal_secundaria",
-            "tipo_logradouro",
-            "logradouro",
-            "numero",
-            "complemento",
-            "bairro",
-            "cep",
-            "uf",
-            "municipio",
-            "ddd1",
-            "telefone1",
-            "ddd2",
-            "telefone2",
-            "ddd_fax",
-            "fax",
-            "email",
-            "situacao_especial",
-            "data_situacao_especial"
-        ]
-
-        self._execute_pipeline(
-            model=Estabelecimento,
-            file_path=file_path,
-            columns=columns,
-            validator_func=self.validator.validate_estabelecimento
-        )
-
-    # =====================================================
-    # SOCIO
-    # =====================================================
-    def _process_socio(self, file_path):
-
-        columns = [
-            "cnpj_basico",
-            "identificador_socio",
-            "nome_socio",
-            "cpf_cnpj_socio",
-            "qualificacao_socio",
-            "data_entrada_sociedade",
-            "pais",
-            "representante_legal",
-            "nome_representante",
-            "qualificacao_representante_legal",
-            "faixa_etaria"
-        ]
-
-        self._execute_pipeline(
-            model=Socio,
-            file_path=file_path,
-            columns=columns,
-            validator_func=self.validator.validate_socio
-        )
-
-    # =====================================================
-    # CORE PIPELINE
-    # =====================================================
-    def _execute_pipeline(
-        self,
-        model,
-        file_path: Path,
-        columns: list,
-        validator_func
-    ):
-
-        self.logger.info(f"Processando {model.__name__.upper()}: {file_path.name}")
+        self.logger.info(f"Iniciando processamento: {file_path}")
 
         db = SessionLocal()
+        repo = BulkRepository(db)
 
         total = 0
+        chunk_count = 0
 
         try:
-            repo = BulkRepository(db)
+            for chunk in pd.read_csv(
+                file_path,
+                sep=";",
+                names=columns,
+                dtype=str,
+                chunksize=50000,
+                encoding="latin1"
+            ):
 
-            for chunk in self.loader.load(file_path, columns):
+                start_chunk = time.time()
+                chunk_count += 1
 
-                # ---------------------------
-                # 1. SANITIZE
-                # ---------------------------
+                # =========================
+                # TRANSFORM
+                # =========================
                 chunk = self.transformer.sanitize(chunk)
 
-                # ---------------------------
-                # 2. VALIDATE
-                # ---------------------------
-                chunk = validator_func(chunk)
+                # =========================
+                # VALIDATE
+                # =========================
+                chunk = self._validate(model, chunk)
 
-                if chunk.empty:
+                # =========================
+                # DEDUPLICAÇÃO
+                # =========================
+                chunk = self.deduplicator.drop_duplicates(chunk, key)
+
+                # =========================
+                # NaN → None
+                # =========================
+                chunk = chunk.replace({np.nan: None})
+
+                data = chunk.to_dict(orient="records")
+
+                if not data:
+                    self.logger.debug(f"Chunk {chunk_count} vazio — ignorado")
                     continue
 
-                # ---------------------------
-                # 3. LOG DE NULOS
-                # ---------------------------
-                nan_count = chunk.isna().sum().sum()
-                if nan_count > 0:
-                    self.logger.warning(f"{nan_count} valores NaN convertidos para NULL")
+                # =========================
+                # INSERT
+                # =========================
+                inserted = repo.bulk_insert(model, data)
 
-                # ---------------------------
-                # 4. CONVERTER PARA DICT
-                # ---------------------------
-                data = chunk.where(chunk.notna(), None).to_dict(orient="records")
+                total += inserted if inserted else 0
 
-                # ---------------------------
-                # 5. INSERT
-                # ---------------------------
-                repo.bulk_insert(model, data)
+                # =========================
+                # PERFORMANCE
+                # =========================
+                end_chunk = time.time()
+                duration = end_chunk - start_chunk
 
-                total += len(data)
+                throughput = int(len(data) / duration) if duration > 0 else 0
 
-                if total % 100000 == 0:
-                    self.logger.info(f"{file_path.name} → {total} registros")
+                mem_mb = chunk.memory_usage(deep=True).sum() / 1024**2
 
-            self.logger.info(f"{file_path.name} → {total} registros")
+                self.logger.info(
+                    f"{model.__tablename__} | "
+                    f"Chunk {chunk_count} | "
+                    f"{len(data)} registros | "
+                    f"{duration:.2f}s | "
+                    f"{throughput} reg/s | "
+                    f"{mem_mb:.2f} MB"
+                )
 
         except Exception as e:
-            self.logger.exception(f"Erro crítico no pipeline {file_path.name}: {e}")
+            self.logger.error(f"Erro crítico: {e}", exc_info=True)
             raise
 
         finally:
             db.close()
+
+        # =========================
+        # FINAL
+        # =========================
+        end_total = time.time()
+        total_time = end_total - start_total
+
+        avg_throughput = int(total / total_time) if total_time > 0 else 0
+
+        self.logger.info("=" * 70)
+        self.logger.info(f"FINALIZADO: {total} registros")
+        self.logger.info(f"Tempo total: {total_time:.2f}s")
+        self.logger.info(f"Throughput médio: {avg_throughput} reg/s")
+        self.logger.info("=" * 70)
+
+    # =========================
+    # VALIDAÇÃO DINÂMICA
+    # =========================
+    def _validate(self, model, df):
+
+        name = model.__tablename__
+
+        if name == "empresa":
+            return self.validator.validate_empresa(df)
+
+        elif name == "estabelecimento":
+            return self.validator.validate_estabelecimento(df)
+
+        elif name == "socio":
+            return self.validator.validate_socio(df)
+
+        return df
