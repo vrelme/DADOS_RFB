@@ -1,49 +1,43 @@
 import pandas as pd
+import numpy as np
 
 
 class DataTransformer:
 
     def sanitize(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Sanitização leve e segura:
-        - limpa strings
-        - remove espaços
-        - normaliza valores vazios
-        - NÃO faz conversão de tipos (isso é responsabilidade do Validator)
-        """
 
-        if df.empty:
-            return df
-
-        # =========================================
-        # 1. LIMPEZA DE STRINGS
-        # =========================================
-        str_cols = df.select_dtypes(include=["object"]).columns
-
-        if len(str_cols) > 0:
-            df[str_cols] = df[str_cols].apply(
-                lambda col: (
-                    col.astype(str)
-                    .str.strip()
-                    .replace({
-                        "": None,
-                        "nan": None,
-                        "None": None,
-                        "NaN": None
-                    })
-                )
+        # =========================
+        # CAPITAL SOCIAL
+        # =========================
+        if "capital_social" in df.columns:
+            df["capital_social"] = (
+                df["capital_social"]
+                .astype(str)
+                .str.replace(".", "", regex=False)
+                .str.replace(",", ".", regex=False)
             )
 
-        # =========================================
-        # 2. NORMALIZAÇÃO DE TEXTO (OPCIONAL)
-        # (evita inconsistência tipo "SP ", " sp", etc)
-        # =========================================
-        if "uf" in df.columns:
-            df["uf"] = df["uf"].str.upper()
+            df["capital_social"] = pd.to_numeric(
+                df["capital_social"], errors="coerce"
+            )
 
-        # =========================================
-        # 3. GARANTIR QUE NÃO EXISTE STRING "NULL"
-        # =========================================
-        df = df.replace({"NULL": None, "null": None})
+        # =========================
+        # CAMPOS NUMÉRICOS
+        # =========================
+        int_cols = [
+            "natureza_juridica",
+            "qualificacao_responsavel",
+            "porte_empresa"
+        ]
+
+        for col in int_cols:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+
+        # =========================
+        #  CORREÇÃO CRÍTICA
+        # =========================
+        # Converter NaN → None (compatível com MySQL)
+        df = df.replace({np.nan: None})
 
         return df
