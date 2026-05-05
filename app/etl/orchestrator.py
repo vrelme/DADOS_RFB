@@ -4,6 +4,7 @@ import time
 import logging
 
 from pathlib import Path
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 from app.database import SessionLocal
 from app.config import Settings
@@ -15,6 +16,16 @@ from app.etl.bulk_repository import BulkRepository
 from app.etl.deduplicator import Deduplicator
 
 logger = logging.getLogger(__name__)
+
+
+# =====================================================
+# FUNÇÃO GLOBAL PARA MULTIPROCESSING (OBRIGATÓRIO)
+# =====================================================
+def process_file_task(args):
+    file_path, model, columns, key = args
+
+    orchestrator = ETLOrchestrator()
+    orchestrator._execute_pipeline(file_path, model, columns, key)
 
 
 class ETLOrchestrator:
@@ -29,11 +40,11 @@ class ETLOrchestrator:
         self.chunk_size = Settings.CHUNK_SIZE
 
     # =====================================================
-    # ENTRYPOINT PRINCIPAL
+    # ENTRYPOINT
     # =====================================================
     def run(self):
         self.logger.info("=" * 60)
-        self.logger.info("INICIANDO PIPELINE ETL")
+        self.logger.info("INICIANDO PIPELINE ETL (PARALELO)")
         self.logger.info("=" * 60)
 
         self._process_empresa()
@@ -45,10 +56,36 @@ class ETLOrchestrator:
         self.logger.info("=" * 60)
 
     # =====================================================
+    # PARALELISMO
+    # =====================================================
+    def _run_parallel(self, tasks):
+
+        if not tasks:
+            self.logger.warning("Nenhuma tarefa para processar")
+            return
+
+        self.logger.info(
+            f"Executando {len(tasks)} arquivos com {Settings.MAX_WORKERS} workers"
+        )
+
+        with ProcessPoolExecutor(max_workers=Settings.MAX_WORKERS) as executor:
+
+            futures = [executor.submit(process_file_task, t) for t in tasks]
+
+            for future in as_completed(futures):
+                try:
+                    future.result()
+                except Exception as e:
+                    self.logger.error(
+                        f"Erro em execução paralela: {e}",
+                        exc_info=True
+                    )
+
+    # =====================================================
     # EMPRESA
     # =====================================================
     def _process_empresa(self):
-        files = Path(Settings.INPUT_DIR).glob("*.EMPRECSV")
+        files = list(Path(Settings.INPUT_DIR).glob("*.EMPRECSV"))
 
         columns = [
             "cnpj_basico",
@@ -60,19 +97,18 @@ class ETLOrchestrator:
             "ente_federativo"
         ]
 
-        for file in files:
-            self._execute_pipeline(
-                file_path=file,
-                model=Empresa,
-                columns=columns,
-                key=["cnpj_basico"]
-            )
+        tasks = [
+            (file, Empresa, columns, ["cnpj_basico"])
+            for file in files
+        ]
+
+        self._run_parallel(tasks)
 
     # =====================================================
     # ESTABELECIMENTO
     # =====================================================
     def _process_estabelecimento(self):
-        files = Path(Settings.INPUT_DIR).glob("*.ESTABELE")
+        files = list(Path(Settings.INPUT_DIR).glob("*.ESTABELE"))
 
         columns = [
             "cnpj_basico", "cnpj_ordem", "cnpj_dv",
@@ -91,19 +127,19 @@ class ETLOrchestrator:
             "situacao_especial", "data_situacao_especial"
         ]
 
-        for file in files:
-            self._execute_pipeline(
-                file_path=file,
-                model=Estabelecimento,
-                columns=columns,
-                key=["cnpj_basico", "cnpj_ordem", "cnpj_dv"]
-            )
+        tasks = [
+            (file, Estabelecimento, columns,
+             ["cnpj_basico", "cnpj_ordem", "cnpj_dv"])
+            for file in files
+        ]
+
+        self._run_parallel(tasks)
 
     # =====================================================
     # SOCIO
     # =====================================================
     def _process_socio(self):
-        files = Path(Settings.INPUT_DIR).glob("*.SOCIOCSV")
+        files = list(Path(Settings.INPUT_DIR).glob("*.SOCIOCSV"))
 
         columns = [
             "cnpj_basico",
@@ -119,20 +155,21 @@ class ETLOrchestrator:
             "faixa_etaria"
         ]
 
-        for file in files:
-            self._execute_pipeline(
-                file_path=file,
-                model=Socio,
-                columns=columns,
-                key=["cnpj_basico"]
-            )
+        tasks = [
+            (file, Socio, columns, ["cnpj_basico"])
+            for file in files
+        ]
+
+        self._run_parallel(tasks)
 
     # =====================================================
     # PIPELINE CORE
     # =====================================================
     def _execute_pipeline(self, file_path, model, columns, key):
 
-        self.logger.info(f"Processando {model.__tablename__.upper()}: {file_path.name}")
+        self.logger.info(
+            f"Processando {model.__tablename__.upper()}: {file_path.name}"
+        )
 
         db = SessionLocal()
         repo = BulkRepository(db)
@@ -152,24 +189,16 @@ class ETLOrchestrator:
 
                 chunk_start = time.time()
 
-                # =========================
                 # TRANSFORM
-                # =========================
                 chunk = self.transformer.sanitize(chunk)
 
-                # =========================
                 # VALIDATE
-                # =========================
                 chunk = self._validate(model, chunk)
 
-                # =========================
-                # DEDUPLICAÇÃO
-                # =========================
+                # DEDUP
                 chunk = self.deduplicator.drop_duplicates(chunk, key)
 
-                # =========================
                 # NaN → None
-                # =========================
                 chunk = chunk.replace({np.nan: None})
 
                 data = chunk.to_dict(orient="records")
@@ -177,24 +206,18 @@ class ETLOrchestrator:
                 if not data:
                     continue
 
-                # =========================
                 # INSERT
-                # =========================
                 repo.bulk_insert(model, data)
 
                 total += len(data)
 
-                # =========================
-                # PERFORMANCE LOG
-                # =========================
+                # PERFORMANCE
                 elapsed = time.time() - chunk_start
                 rps = int(len(data) / elapsed) if elapsed > 0 else 0
 
                 self.logger.info(
                     f"{model.__tablename__} | "
-                    f"+{len(data)} registros | "
-                    f"{rps} reg/s | "
-                    f"total={total}"
+                    f"+{len(data)} | {rps} reg/s | total={total}"
                 )
 
         except Exception as e:
@@ -211,8 +234,7 @@ class ETLOrchestrator:
 
         self.logger.info(
             f"FINALIZADO {model.__tablename__.upper()} | "
-            f"{total} registros | "
-            f"{round(total_time, 2)}s"
+            f"{total} registros | {round(total_time, 2)}s"
         )
 
     # =====================================================

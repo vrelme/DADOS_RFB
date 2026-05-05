@@ -19,6 +19,7 @@ class Settings:
     # =========================
     # DATABASE
     # =========================
+    DB_DRIVER = os.getenv("DB_DRIVER", "mysql+pymysql")
     DB_HOST = os.getenv("DB_HOST", "localhost")
     DB_PORT = os.getenv("DB_PORT", "3306")
     DB_USER = os.getenv("DB_USER", "root")
@@ -58,6 +59,11 @@ class Settings:
     # SQLALCHEMY URL
     # =========================
     DATABASE_URL = (
-        f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}"
+        f"{DB_DRIVER}://{DB_USER}:{DB_PASSWORD}"
         f"@{DB_HOST}:{DB_PORT}/{DB_NAME}?charset=utf8mb4"
     )
+
+    # =========================
+    # Multiprocessing
+    # =========================
+    MAX_WORKERS = int(os.getenv("MAX_WORKERS", 4))
