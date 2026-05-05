@@ -1,9 +1,14 @@
 import pandas as pd
 import numpy as np
-import logging
 import time
+import logging
+
+from pathlib import Path
 
 from app.database import SessionLocal
+from app.config import Settings
+from app.models import Empresa, Estabelecimento, Socio
+
 from app.etl.transformer import DataTransformer
 from app.etl.validator import Validator
 from app.etl.bulk_repository import BulkRepository
@@ -21,20 +26,119 @@ class ETLOrchestrator:
         self.validator = Validator()
         self.deduplicator = Deduplicator()
 
-    # =========================
-    # EXECUÇÃO PRINCIPAL
-    # =========================
-    def run(self, file_path, model, columns, key):
+        self.chunk_size = Settings.CHUNK_SIZE
 
-        start_total = time.time()
+    # =====================================================
+    # ENTRYPOINT PRINCIPAL
+    # =====================================================
+    def run(self):
+        self.logger.info("=" * 60)
+        self.logger.info("INICIANDO PIPELINE ETL")
+        self.logger.info("=" * 60)
 
-        self.logger.info(f"Iniciando processamento: {file_path}")
+        self._process_empresa()
+        self._process_estabelecimento()
+        self._process_socio()
+
+        self.logger.info("=" * 60)
+        self.logger.info("PIPELINE FINALIZADO")
+        self.logger.info("=" * 60)
+
+    # =====================================================
+    # EMPRESA
+    # =====================================================
+    def _process_empresa(self):
+        files = Path(Settings.INPUT_DIR).glob("*.EMPRECSV")
+
+        columns = [
+            "cnpj_basico",
+            "razao_social",
+            "natureza_juridica",
+            "qualificacao_responsavel",
+            "capital_social",
+            "porte_empresa",
+            "ente_federativo"
+        ]
+
+        for file in files:
+            self._execute_pipeline(
+                file_path=file,
+                model=Empresa,
+                columns=columns,
+                key=["cnpj_basico"]
+            )
+
+    # =====================================================
+    # ESTABELECIMENTO
+    # =====================================================
+    def _process_estabelecimento(self):
+        files = Path(Settings.INPUT_DIR).glob("*.ESTABELE")
+
+        columns = [
+            "cnpj_basico", "cnpj_ordem", "cnpj_dv",
+            "identificador_matriz_filial", "nome_fantasia",
+            "situacao_cadastral", "data_situacao_cadastral",
+            "motivo_situacao_cadastral", "nome_cidade_exterior",
+            "pais", "data_inicio_atividade",
+            "cnae_fiscal_principal", "cnae_fiscal_secundaria",
+            "tipo_logradouro", "logradouro", "numero",
+            "complemento", "bairro", "cep",
+            "uf", "municipio",
+            "ddd1", "telefone1",
+            "ddd2", "telefone2",
+            "ddd_fax", "fax",
+            "email",
+            "situacao_especial", "data_situacao_especial"
+        ]
+
+        for file in files:
+            self._execute_pipeline(
+                file_path=file,
+                model=Estabelecimento,
+                columns=columns,
+                key=["cnpj_basico", "cnpj_ordem", "cnpj_dv"]
+            )
+
+    # =====================================================
+    # SOCIO
+    # =====================================================
+    def _process_socio(self):
+        files = Path(Settings.INPUT_DIR).glob("*.SOCIOCSV")
+
+        columns = [
+            "cnpj_basico",
+            "identificador_socio",
+            "nome_socio",
+            "cpf_cnpj_socio",
+            "qualificacao_socio",
+            "data_entrada_sociedade",
+            "pais",
+            "representante_legal",
+            "nome_representante",
+            "qualificacao_representante_legal",
+            "faixa_etaria"
+        ]
+
+        for file in files:
+            self._execute_pipeline(
+                file_path=file,
+                model=Socio,
+                columns=columns,
+                key=["cnpj_basico"]
+            )
+
+    # =====================================================
+    # PIPELINE CORE
+    # =====================================================
+    def _execute_pipeline(self, file_path, model, columns, key):
+
+        self.logger.info(f"Processando {model.__tablename__.upper()}: {file_path.name}")
 
         db = SessionLocal()
         repo = BulkRepository(db)
 
         total = 0
-        chunk_count = 0
+        start_time = time.time()
 
         try:
             for chunk in pd.read_csv(
@@ -42,12 +146,11 @@ class ETLOrchestrator:
                 sep=";",
                 names=columns,
                 dtype=str,
-                chunksize=50000,
+                chunksize=self.chunk_size,
                 encoding="latin1"
             ):
 
-                start_chunk = time.time()
-                chunk_count += 1
+                chunk_start = time.time()
 
                 # =========================
                 # TRANSFORM
@@ -72,59 +175,49 @@ class ETLOrchestrator:
                 data = chunk.to_dict(orient="records")
 
                 if not data:
-                    self.logger.debug(f"Chunk {chunk_count} vazio — ignorado")
                     continue
 
                 # =========================
                 # INSERT
                 # =========================
-                inserted = repo.bulk_insert(model, data)
+                repo.bulk_insert(model, data)
 
-                total += inserted if inserted else 0
+                total += len(data)
 
                 # =========================
-                # PERFORMANCE
+                # PERFORMANCE LOG
                 # =========================
-                end_chunk = time.time()
-                duration = end_chunk - start_chunk
-
-                throughput = int(len(data) / duration) if duration > 0 else 0
-
-                mem_mb = chunk.memory_usage(deep=True).sum() / 1024**2
+                elapsed = time.time() - chunk_start
+                rps = int(len(data) / elapsed) if elapsed > 0 else 0
 
                 self.logger.info(
                     f"{model.__tablename__} | "
-                    f"Chunk {chunk_count} | "
-                    f"{len(data)} registros | "
-                    f"{duration:.2f}s | "
-                    f"{throughput} reg/s | "
-                    f"{mem_mb:.2f} MB"
+                    f"+{len(data)} registros | "
+                    f"{rps} reg/s | "
+                    f"total={total}"
                 )
 
         except Exception as e:
-            self.logger.error(f"Erro crítico: {e}", exc_info=True)
+            self.logger.error(
+                f"Erro crítico no pipeline {file_path.name}: {e}",
+                exc_info=True
+            )
             raise
 
         finally:
             db.close()
 
-        # =========================
-        # FINAL
-        # =========================
-        end_total = time.time()
-        total_time = end_total - start_total
+        total_time = time.time() - start_time
 
-        avg_throughput = int(total / total_time) if total_time > 0 else 0
+        self.logger.info(
+            f"FINALIZADO {model.__tablename__.upper()} | "
+            f"{total} registros | "
+            f"{round(total_time, 2)}s"
+        )
 
-        self.logger.info("=" * 70)
-        self.logger.info(f"FINALIZADO: {total} registros")
-        self.logger.info(f"Tempo total: {total_time:.2f}s")
-        self.logger.info(f"Throughput médio: {avg_throughput} reg/s")
-        self.logger.info("=" * 70)
-
-    # =========================
+    # =====================================================
     # VALIDAÇÃO DINÂMICA
-    # =========================
+    # =====================================================
     def _validate(self, model, df):
 
         name = model.__tablename__

@@ -1,0 +1,5 @@
+-r base.txt
+
+flake8==7.0.0
+pytest==8.2.0
+black==24.4.2
