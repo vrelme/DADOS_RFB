@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import text
 from sqlalchemy.dialects.mysql import insert
 import logging
 import time
@@ -94,3 +95,33 @@ class BulkRepository:
         )
 
         return success
+    
+    # =====================================================
+    # TRUNCATE TABLE
+    # =====================================================
+    def truncate_table(self, table_name: str):
+
+        logger.info(f"Limpando tabela: {table_name}")
+
+        try:
+
+            self.db.execute(
+                text(f"TRUNCATE TABLE {table_name}")
+            )
+
+            self.db.commit()
+
+            logger.info(
+                f"{table_name} truncada com sucesso"
+            )
+
+        except SQLAlchemyError as e:
+
+            self.db.rollback()
+
+            logger.error(
+                f"Erro truncate {table_name}: {e}",
+                exc_info=True
+            )
+
+            raise    
