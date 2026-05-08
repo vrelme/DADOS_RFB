@@ -209,6 +209,35 @@ class ETLOrchestrator:
             f"em {elapsed}s"
         )
 
+    def _load_files_to_staging(self, files, table_name):
+
+        if not files:
+            self.logger.warning(
+                f"Nenhum arquivo encontrado para {table_name}"
+            )
+            return
+
+        if (
+            Settings.LOAD_STRATEGY == "load_data"
+            and Settings.ENABLE_PARALLELISM
+        ):
+            tasks = [
+                (file, None, None, None, table_name)
+                for file in files
+            ]
+            self._run_parallel(tasks)
+            return
+
+        if Settings.LOAD_STRATEGY == "load_data":
+            for file_path in files:
+                self._execute_pipeline(
+                    file_path=file_path,
+                    staging_model=None,
+                    columns=None,
+                    key=None,
+                    table_name=table_name
+                )
+
     # =====================================================
     # EMPRESA
     # =====================================================
@@ -271,7 +300,10 @@ class ETLOrchestrator:
         # =============================================
         # WORKERS -> STAGING
         # =============================================
-        self._run_parallel(tasks)
+        if Settings.LOAD_STRATEGY == "load_data":
+            self._load_files_to_staging(files, "empresa")
+        else:
+            self._run_parallel(tasks)
 
         # =============================================
         # MERGE CENTRALIZADO
@@ -381,7 +413,10 @@ class ETLOrchestrator:
             for file in files
         ]
 
-        self._run_parallel(tasks)
+        if Settings.LOAD_STRATEGY == "load_data":
+            self._load_files_to_staging(files, "estabelecimento")
+        else:
+            self._run_parallel(tasks)
 
         db = SessionLocal()
 
@@ -466,7 +501,10 @@ class ETLOrchestrator:
             for file in files
         ]
 
-        self._run_parallel(tasks)
+        if Settings.LOAD_STRATEGY == "load_data":
+            self._load_files_to_staging(files, "socio")
+        else:
+            self._run_parallel(tasks)
 
         db = SessionLocal()
 
@@ -527,6 +565,27 @@ class ETLOrchestrator:
                 worker=socket.gethostname(),
                 environment=Settings.ENVIRONMENT
             )
+
+            if Settings.LOAD_STRATEGY == "load_data":
+                total = repo.load_file_to_staging(
+                    table_name=table_name,
+                    file_path=file_path
+                )
+                execution_repo.success(
+                    execution,
+                    total
+                )
+                total_time = round(
+                    time.time() - start_time,
+                    2
+                )
+                self.logger.info(
+                    f"FINALIZADO | "
+                    f"{file_path.name} | "
+                    f"{total} registros | "
+                    f"{total_time}s"
+                )
+                return
 
             # =============================================
             # READ CSV

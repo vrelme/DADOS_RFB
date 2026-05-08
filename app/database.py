@@ -21,7 +21,11 @@ engine = create_engine(
 
     pool_timeout=Settings.DB_POOL_TIMEOUT,
 
-    pool_pre_ping=Settings.DB_POOL_PRE_PING
+    pool_pre_ping=Settings.DB_POOL_PRE_PING,
+
+    connect_args={
+        "local_infile": Settings.DB_LOCAL_INFILE
+    }
 )
 
 # =====================================================

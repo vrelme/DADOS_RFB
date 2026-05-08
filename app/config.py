@@ -96,6 +96,10 @@ class Settings:
         os.getenv("DB_POOL_PRE_PING", "True").lower() == "true"
     )
 
+    DB_LOCAL_INFILE = (
+        os.getenv("DB_LOCAL_INFILE", "True").lower() == "true"
+    )
+
     # =====================================================
     # ETL
     # =====================================================
@@ -108,6 +112,8 @@ class Settings:
     ENABLE_PARALLELISM = (
         os.getenv("ENABLE_PARALLELISM", "True").lower() == "true"
     )
+
+    LOAD_STRATEGY = os.getenv("LOAD_STRATEGY", "load_data").lower()
 
     # =====================================================
     # STAGING
