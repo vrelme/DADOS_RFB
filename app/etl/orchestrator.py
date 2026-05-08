@@ -3,7 +3,9 @@
 import time
 import socket
 import logging
+import threading
 
+import psutil
 import numpy as np
 import pandas as pd
 
@@ -42,26 +44,26 @@ logger = logging.getLogger(__name__)
 
 
 # =====================================================
-# WORKER PROCESS
+# WORKER TASK
 # =====================================================
 def process_file_task(args):
 
     (
         file_path,
-        model,
         staging_model,
         columns,
-        key
+        key,
+        table_name
     ) = args
 
     orchestrator = ETLOrchestrator()
 
     orchestrator._execute_pipeline(
         file_path=file_path,
-        model=model,
         staging_model=staging_model,
         columns=columns,
-        key=key
+        key=key,
+        table_name=table_name
     )
 
 
@@ -83,6 +85,36 @@ class ETLOrchestrator:
         self.chunk_size = Settings.CHUNK_SIZE
 
     # =====================================================
+    # HEARTBEAT
+    # =====================================================
+    def _heartbeat(self):  # <- incluída no código
+
+        while True:
+
+            self.logger.info(
+                "HEARTBEAT | ETL em execução..."
+            )
+
+            time.sleep(60)
+
+    # =====================================================
+    # SYSTEM MONITOR
+    # =====================================================
+    def _system_monitor(self):  # <- incluída no código
+
+        while True:
+
+            cpu = psutil.cpu_percent()
+
+            ram = psutil.virtual_memory().percent
+
+            self.logger.info(
+                f"MONITOR | CPU={cpu}% | RAM={ram}%"
+            )
+
+            time.sleep(60)
+
+    # =====================================================
     # MAIN
     # =====================================================
     def run(self):
@@ -92,6 +124,22 @@ class ETLOrchestrator:
         self.logger.info("=" * 80)
 
         Settings.create_dirs()
+
+        # =============================================
+        # HEARTBEAT THREAD
+        # =============================================
+        threading.Thread(                 # <- incluída no código
+            target=self._heartbeat,      # <- incluída no código
+            daemon=True                  # <- incluída no código
+        ).start()
+
+        # =============================================
+        # SYSTEM MONITOR THREAD
+        # =============================================
+        threading.Thread(                    # <- incluída no código
+            target=self._system_monitor,    # <- incluída no código
+            daemon=True                     # <- incluída no código
+        ).start()
 
         self._process_empresa()
 
@@ -124,6 +172,8 @@ class ETLOrchestrator:
             f"Workers: {Settings.MAX_WORKERS}"
         )
 
+        start_parallel = time.time()
+
         with ProcessPoolExecutor(
             max_workers=Settings.MAX_WORKERS
         ) as executor:
@@ -149,6 +199,16 @@ class ETLOrchestrator:
                         exc_info=True
                     )
 
+        elapsed = round(
+            time.time() - start_parallel,
+            2
+        )
+
+        self.logger.info(
+            f"PARALELISMO FINALIZADO "
+            f"em {elapsed}s"
+        )
+
     # =====================================================
     # EMPRESA
     # =====================================================
@@ -164,8 +224,16 @@ class ETLOrchestrator:
 
             repo = BulkRepository(db)
 
+            truncate_start = time.time()  # <- incluída no código
+
             repo.truncate_table(
                 "empresa_staging"
+            )
+
+            self.logger.info(  # <- incluída no código
+                f"TRUNCATE empresa_staging "
+                f"concluído em "
+                f"{round(time.time()-truncate_start,2)}s"
             )
 
         finally:
@@ -191,16 +259,41 @@ class ETLOrchestrator:
 
             (
                 file,
-                Empresa,
                 EmpresaStaging,
                 columns,
-                ["cnpj_basico"]
+                ["cnpj_basico"],
+                "empresa"
             )
 
             for file in files
         ]
 
+        # =============================================
+        # WORKERS -> STAGING
+        # =============================================
         self._run_parallel(tasks)
+
+        # =============================================
+        # MERGE CENTRALIZADO
+        # =============================================
+        db = SessionLocal()
+
+        try:
+
+            repo = BulkRepository(db)
+
+            merge_start = time.time()
+
+            repo.merge_empresa()
+
+            self.logger.info(
+                f"MERGE empresa concluído "
+                f"em {round(time.time()-merge_start,2)}s"
+            )
+
+        finally:
+
+            db.close()
 
     # =====================================================
     # ESTABELECIMENTO
@@ -217,8 +310,16 @@ class ETLOrchestrator:
 
             repo = BulkRepository(db)
 
+            truncate_start = time.time()
+
             repo.truncate_table(
                 "estabelecimento_staging"
+            )
+
+            self.logger.info(
+                f"TRUNCATE estabelecimento_staging "
+                f"concluído em "
+                f"{round(time.time()-truncate_start,2)}s"
             )
 
         finally:
@@ -267,20 +368,40 @@ class ETLOrchestrator:
 
             (
                 file,
-                Estabelecimento,
                 EstabelecimentoStaging,
                 columns,
                 [
                     "cnpj_basico",
                     "cnpj_ordem",
                     "cnpj_dv"
-                ]
+                ],
+                "estabelecimento"
             )
 
             for file in files
         ]
 
         self._run_parallel(tasks)
+
+        db = SessionLocal()
+
+        try:
+
+            repo = BulkRepository(db)
+
+            merge_start = time.time()
+
+            repo.merge_estabelecimento()
+
+            self.logger.info(
+                f"MERGE estabelecimento "
+                f"concluído em "
+                f"{round(time.time()-merge_start,2)}s"
+            )
+
+        finally:
+
+            db.close()
 
     # =====================================================
     # SOCIO
@@ -297,8 +418,16 @@ class ETLOrchestrator:
 
             repo = BulkRepository(db)
 
+            truncate_start = time.time()
+
             repo.truncate_table(
                 "socio_staging"
+            )
+
+            self.logger.info(
+                f"TRUNCATE socio_staging "
+                f"concluído em "
+                f"{round(time.time()-truncate_start,2)}s"
             )
 
         finally:
@@ -328,10 +457,10 @@ class ETLOrchestrator:
 
             (
                 file,
-                Socio,
                 SocioStaging,
                 columns,
-                ["cnpj_basico"]
+                ["cnpj_basico"],
+                "socio"
             )
 
             for file in files
@@ -339,16 +468,35 @@ class ETLOrchestrator:
 
         self._run_parallel(tasks)
 
+        db = SessionLocal()
+
+        try:
+
+            repo = BulkRepository(db)
+
+            merge_start = time.time()
+
+            repo.merge_socio()
+
+            self.logger.info(
+                f"MERGE socio concluído "
+                f"em {round(time.time()-merge_start,2)}s"
+            )
+
+        finally:
+
+            db.close()
+
     # =====================================================
-    # EXECUTE PIPELINE
+    # PIPELINE
     # =====================================================
     def _execute_pipeline(
         self,
         file_path,
-        model,
         staging_model,
         columns,
-        key
+        key,
+        table_name
     ):
 
         db = SessionLocal()
@@ -370,12 +518,12 @@ class ETLOrchestrator:
             )
 
             # =============================================
-            # START EXECUTION
+            # EXECUTION START
             # =============================================
             execution = execution_repo.start(
                 pipeline="RFB_LOADER_ENTERPRISE",
                 file_name=file_path.name,
-                table_name=model.__tablename__,
+                table_name=table_name,
                 worker=socket.gethostname(),
                 environment=Settings.ENVIRONMENT
             )
@@ -405,12 +553,12 @@ class ETLOrchestrator:
                 # VALIDATE
                 # =========================================
                 chunk = self._validate(
-                    model,
+                    table_name,
                     chunk
                 )
 
                 # =========================================
-                # DEDUPLICATE
+                # DEDUPLICAÇÃO
                 # =========================================
                 chunk = self.deduplicator.drop_duplicates(
                     chunk,
@@ -443,7 +591,7 @@ class ETLOrchestrator:
                 total += len(data)
 
                 # =========================================
-                # PERFORMANCE
+                # PERFORMANCE LOG
                 # =========================================
                 elapsed = (
                     time.time() - chunk_start
@@ -461,21 +609,6 @@ class ETLOrchestrator:
                     f"{rps} reg/s | "
                     f"total={total}"
                 )
-
-            # =============================================
-            # MERGE FINAL
-            # =============================================
-            if model.__tablename__ == "empresa":
-
-                repo.merge_empresa()
-
-            elif model.__tablename__ == "estabelecimento":
-
-                repo.merge_estabelecimento()
-
-            elif model.__tablename__ == "socio":
-
-                repo.merge_socio()
 
             # =============================================
             # SUCCESS
@@ -519,25 +652,23 @@ class ETLOrchestrator:
             db.close()
 
     # =====================================================
-    # VALIDATE ROUTER
+    # VALIDATION ROUTER
     # =====================================================
     def _validate(
         self,
-        model,
+        table_name,
         df
     ):
 
-        table = model.__tablename__
-
-        if table == "empresa":
+        if table_name == "empresa":
 
             return self.validator.validate_empresa(df)
 
-        elif table == "estabelecimento":
+        elif table_name == "estabelecimento":
 
             return self.validator.validate_estabelecimento(df)
 
-        elif table == "socio":
+        elif table_name == "socio":
 
             return self.validator.validate_socio(df)
 
