@@ -115,6 +115,8 @@ class Settings:
 
     LOAD_STRATEGY = os.getenv("LOAD_STRATEGY", "load_data").lower()
 
+    MERGE_STRATEGY = os.getenv("MERGE_STRATEGY", "full_refresh").lower()
+
     # =====================================================
     # STAGING
     # =====================================================

@@ -10,6 +10,7 @@ from sqlalchemy.dialects.mysql import insert
 from sqlalchemy.orm import Session
 
 from app.config import Settings
+from app.exceptions import DatabaseOperationError
 
 logger = logging.getLogger(__name__)
 
@@ -214,7 +215,11 @@ class BulkRepository:
                 f"({file_path.name}): {e}",
                 exc_info=True
             )
-            raise
+            raise self._database_operation_error(
+                operation="LOAD DATA",
+                table_name=table_name,
+                error=e
+            ) from e
 
     def _prepare_bulk_session(self):
 
@@ -223,6 +228,89 @@ class BulkRepository:
         )
         self.db.execute(text("SET SESSION unique_checks = 0"))
         self.db.execute(text("SET SESSION foreign_key_checks = 0"))
+
+    def _execute_sql_with_retries(
+        self,
+        operation: str,
+        table_name: str,
+        sql
+    ):
+
+        last_error = None
+
+        for attempt in range(1, Settings.MAX_RETRIES + 1):
+            try:
+                self._prepare_bulk_session()
+                result = self.db.execute(sql)
+                self.db.commit()
+                return result
+
+            except SQLAlchemyError as e:
+                self.db.rollback()
+                last_error = e
+
+                logger.warning(
+                    f"{operation} {table_name} falhou "
+                    f"tentativa {attempt}/{Settings.MAX_RETRIES}: {e}"
+                )
+
+                self._log_database_processes()
+
+                if attempt < Settings.MAX_RETRIES:
+                    time.sleep(Settings.RETRY_DELAY)
+
+        raise self._database_operation_error(
+            operation=operation,
+            table_name=table_name,
+            error=last_error
+        )
+
+    def _database_operation_error(
+        self,
+        operation: str,
+        table_name: str,
+        error
+    ):
+
+        code = self._mysql_error_code(error)
+
+        if code == 1205:
+            message = (
+                "Timeout aguardando lock no banco. "
+                "Há outra sessão/transação usando esta tabela ou uma tabela "
+                "relacionada. Execute SHOW FULL PROCESSLIST, finalize sessões "
+                "bloqueadoras com KILL <id>, feche transações abertas no "
+                "Workbench e rode novamente. Para carga completa, prefira "
+                "MERGE_STRATEGY=full_refresh."
+            )
+        elif code == 3948:
+            message = (
+                "LOAD DATA LOCAL INFILE está desabilitado no cliente ou no "
+                "servidor. Habilite local_infile no MySQL/MariaDB e mantenha "
+                "DB_LOCAL_INFILE=True no .env."
+            )
+        else:
+            message = (
+                "Erro operacional no banco. Verifique conectividade, locks, "
+                "permissões e o log completo do MySQL/MariaDB."
+            )
+
+        return DatabaseOperationError(
+            operation=operation,
+            table_name=table_name,
+            user_message=message,
+            original_error=error
+        )
+
+    def _mysql_error_code(self, error):
+
+        original = getattr(error, "orig", None)
+        args = getattr(original, "args", None)
+
+        if args:
+            return args[0]
+
+        return None
 
     def _set_clause_for_text_columns(
         self,
@@ -349,17 +437,31 @@ class BulkRepository:
         start_time = time.time()
 
         try:
-
-            # =============================================
-            # MYSQL SESSION OPTIMIZATION
-            # =============================================
-            self.db.execute(
-                text(
-                    "SET SESSION innodb_lock_wait_timeout = 300"
-                )
-            )  # <- incluída no código
-
-            sql = text("""
+            if Settings.MERGE_STRATEGY == "full_refresh":
+                self.truncate_table("empresa")
+                sql = text("""
+                    INSERT INTO empresa (
+                        cnpj_basico,
+                        razao_social,
+                        natureza_juridica,
+                        qualificacao_responsavel,
+                        capital_social,
+                        porte_empresa,
+                        ente_federativo
+                    )
+                    SELECT
+                        cnpj_basico,
+                        razao_social,
+                        natureza_juridica,
+                        qualificacao_responsavel,
+                        capital_social,
+                        porte_empresa,
+                        ente_federativo
+                    FROM empresa_staging
+                    WHERE cnpj_basico IS NOT NULL
+                """)
+            else:
+                sql = text("""
                 INSERT INTO empresa (
 
                     cnpj_basico,
@@ -404,11 +506,13 @@ class BulkRepository:
 
                     ente_federativo =
                         VALUES(ente_federativo)
-            """)
+                """)
 
-            self.db.execute(sql)
-
-            self.db.commit()
+            self._execute_sql_with_retries(
+                operation="MERGE",
+                table_name="empresa",
+                sql=sql
+            )
 
             elapsed = round(
                 time.time() - start_time,
@@ -429,7 +533,11 @@ class BulkRepository:
                 exc_info=True
             )
 
-            raise
+            raise self._database_operation_error(
+                operation="MERGE",
+                table_name="empresa",
+                error=e
+            ) from e
 
     # =====================================================
     # MERGE ESTABELECIMENTO
@@ -444,17 +552,80 @@ class BulkRepository:
         start_time = time.time()
 
         try:
-
-            # =============================================
-            # MYSQL SESSION OPTIMIZATION
-            # =============================================
-            self.db.execute(
-                text(
-                    "SET SESSION innodb_lock_wait_timeout = 300"
-                )
-            )  # <- incluída no código
-
-            sql = text("""
+            if Settings.MERGE_STRATEGY == "full_refresh":
+                self.truncate_table("estabelecimento")
+                sql = text("""
+                    INSERT INTO estabelecimento (
+                        cnpj_basico,
+                        cnpj_ordem,
+                        cnpj_dv,
+                        identificador_matriz_filial,
+                        nome_fantasia,
+                        situacao_cadastral,
+                        data_situacao_cadastral,
+                        motivo_situacao_cadastral,
+                        nome_cidade_exterior,
+                        pais,
+                        data_inicio_atividade,
+                        cnae_fiscal_principal,
+                        cnae_fiscal_secundaria,
+                        tipo_logradouro,
+                        logradouro,
+                        numero,
+                        complemento,
+                        bairro,
+                        cep,
+                        uf,
+                        municipio,
+                        ddd1,
+                        telefone1,
+                        ddd2,
+                        telefone2,
+                        ddd_fax,
+                        fax,
+                        email,
+                        situacao_especial,
+                        data_situacao_especial
+                    )
+                    SELECT
+                        cnpj_basico,
+                        cnpj_ordem,
+                        cnpj_dv,
+                        identificador_matriz_filial,
+                        nome_fantasia,
+                        situacao_cadastral,
+                        data_situacao_cadastral,
+                        motivo_situacao_cadastral,
+                        nome_cidade_exterior,
+                        pais,
+                        data_inicio_atividade,
+                        cnae_fiscal_principal,
+                        cnae_fiscal_secundaria,
+                        tipo_logradouro,
+                        logradouro,
+                        numero,
+                        complemento,
+                        bairro,
+                        cep,
+                        uf,
+                        municipio,
+                        ddd1,
+                        telefone1,
+                        ddd2,
+                        telefone2,
+                        ddd_fax,
+                        fax,
+                        email,
+                        situacao_especial,
+                        data_situacao_especial
+                    FROM estabelecimento_staging
+                    WHERE
+                        cnpj_basico IS NOT NULL
+                        AND cnpj_ordem IS NOT NULL
+                        AND cnpj_dv IS NOT NULL
+                """)
+            else:
+                sql = text("""
                 INSERT INTO estabelecimento (
 
                     cnpj_basico,
@@ -539,11 +710,13 @@ class BulkRepository:
 
                     email =
                         VALUES(email)
-            """)
+                """)
 
-            self.db.execute(sql)
-
-            self.db.commit()
+            self._execute_sql_with_retries(
+                operation="MERGE",
+                table_name="estabelecimento",
+                sql=sql
+            )
 
             elapsed = round(
                 time.time() - start_time,
@@ -564,7 +737,11 @@ class BulkRepository:
                 exc_info=True
             )
 
-            raise
+            raise self._database_operation_error(
+                operation="MERGE",
+                table_name="estabelecimento",
+                error=e
+            ) from e
 
     # =====================================================
     # MERGE SOCIO
@@ -578,15 +755,8 @@ class BulkRepository:
         start_time = time.time()
 
         try:
-
-            # =============================================
-            # MYSQL SESSION OPTIMIZATION
-            # =============================================
-            self.db.execute(
-                text(
-                    "SET SESSION innodb_lock_wait_timeout = 300"
-                )
-            )  # <- incluída no código
+            if Settings.MERGE_STRATEGY == "full_refresh":
+                self.truncate_table("socio")
 
             sql = text("""
                 INSERT INTO socio (
@@ -623,9 +793,11 @@ class BulkRepository:
                 WHERE cnpj_basico IS NOT NULL
             """)
 
-            self.db.execute(sql)
-
-            self.db.commit()
+            self._execute_sql_with_retries(
+                operation="MERGE",
+                table_name="socio",
+                sql=sql
+            )
 
             elapsed = round(
                 time.time() - start_time,
@@ -646,7 +818,11 @@ class BulkRepository:
                 exc_info=True
             )
 
-            raise
+            raise self._database_operation_error(
+                operation="MERGE",
+                table_name="socio",
+                error=e
+            ) from e
 
     # =====================================================
     # TRUNCATE TABLE
@@ -712,7 +888,11 @@ class BulkRepository:
                         f"Erro truncate {table_name}: {e}",
                         exc_info=True
                     )
-                    raise
+                    raise self._database_operation_error(
+                        operation="TRUNCATE",
+                        table_name=table_name,
+                        error=e
+                    ) from e
 
                 time.sleep(Settings.RETRY_DELAY)
 
