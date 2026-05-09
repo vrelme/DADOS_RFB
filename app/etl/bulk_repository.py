@@ -662,46 +662,86 @@ class BulkRepository:
 
         start_time = time.time()
 
+        for attempt in range(1, Settings.MAX_RETRIES + 1):
+
+            try:
+
+                # =============================================
+                # LOCK TIMEOUT
+                # =============================================
+                self.db.execute(
+                    text(
+                        "SET SESSION lock_wait_timeout = 300"
+                    )
+                )
+
+                self.db.execute(
+                    text(
+                        f"TRUNCATE TABLE {table_name}"
+                    )
+                )
+
+                self.db.commit()
+
+                elapsed = round(
+                    time.time() - start_time,
+                    2
+                )
+
+                logger.info(
+                    f"{table_name} truncada "
+                    f"em {elapsed}s"
+                )
+
+                return
+
+            except SQLAlchemyError as e:
+
+                self.db.rollback()
+
+                logger.warning(
+                    f"Erro truncate {table_name} "
+                    f"tentativa {attempt}/"
+                    f"{Settings.MAX_RETRIES}: {e}"
+                )
+
+                self._log_database_processes()
+
+                if attempt == Settings.MAX_RETRIES:
+                    logger.error(
+                        f"Erro truncate {table_name}: {e}",
+                        exc_info=True
+                    )
+                    raise
+
+                time.sleep(Settings.RETRY_DELAY)
+
+    def _log_database_processes(self):
+
         try:
+            result = self.db.execute(text("SHOW FULL PROCESSLIST"))
 
-            # =============================================
-            # LOCK TIMEOUT
-            # =============================================
-            self.db.execute(
-                text(
-                    "SET SESSION lock_wait_timeout = 30"
+            for row in result.mappings():
+                info = row.get("Info")
+                if not info:
+                    continue
+
+                logger.warning(
+                    "PROCESSLIST | "
+                    f"Id={row.get('Id')} | "
+                    f"User={row.get('User')} | "
+                    f"Host={row.get('Host')} | "
+                    f"Db={row.get('db') or row.get('Db')} | "
+                    f"Command={row.get('Command')} | "
+                    f"Time={row.get('Time')} | "
+                    f"State={row.get('State')} | "
+                    f"Info={str(info)[:500]}"
                 )
-            )  # <- incluída no código
-
-            self.db.execute(
-                text(
-                    f"TRUNCATE TABLE {table_name}"
-                )
-            )
-
-            self.db.commit()
-
-            elapsed = round(
-                time.time() - start_time,
-                2
-            )
-
-            logger.info(
-                f"{table_name} truncada "
-                f"em {elapsed}s"
-            )
 
         except SQLAlchemyError as e:
-
-            self.db.rollback()
-
-            logger.error(
-                f"Erro truncate "
-                f"{table_name}: {e}",
-                exc_info=True
+            logger.warning(
+                f"Não foi possível consultar SHOW FULL PROCESSLIST: {e}"
             )
-
-            raise
 
     # =====================================================
     # EXECUTE SQL
