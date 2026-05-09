@@ -1,0 +1,467 @@
+# Documentação Técnica - RFB Loader Enterprise
+
+## 1. Visão Geral
+
+O RFB Loader Enterprise é uma aplicação Python para carga dos dados públicos de CNPJ da Receita Federal do Brasil em banco relacional MySQL/MariaDB.
+
+O pipeline atual usa uma arquitetura em camadas:
+
+- `app.main`: inicialização, validação de ambiente e execução do ETL.
+- `app.config`: leitura de variáveis de ambiente e parâmetros operacionais.
+- `app.database`: engine SQLAlchemy e fábrica de sessões.
+- `app.models`: modelos ORM das tabelas finais, staging e controle de execução.
+- `app.etl.orchestrator`: coordenação do pipeline, paralelismo e ordem de processamento.
+- `app.etl.bulk_repository`: operações de carga massiva, staging, merge e truncamento.
+- `app.etl.validator`, `transformer`, `deduplicator`: tratamento e validação usados no modo pandas.
+- `app.etl.etl_execution_repository`: auditoria de execução por arquivo.
+
+O objetivo operacional é reduzir a carga completa da base RFB usando `LOAD DATA LOCAL INFILE`, staging tables e merge centralizado.
+
+## 2. Execução
+
+Com o ambiente virtual ativo, execute a partir da raiz do repositório:
+
+```bash
+python -m app.main
+```
+
+Configuração recomendada para carga completa:
+
+```env
+LOAD_STRATEGY=load_data
+MERGE_STRATEGY=full_refresh
+DB_LOCAL_INFILE=True
+MAX_WORKERS=4
+```
+
+Para o `LOAD DATA LOCAL INFILE` funcionar, o MySQL/MariaDB precisa estar com `local_infile` habilitado no cliente e no servidor:
+
+```sql
+SHOW GLOBAL VARIABLES LIKE 'local_infile';
+SET GLOBAL local_infile = 1;
+```
+
+## 3. Arquitetura
+
+```mermaid
+flowchart LR
+    User["Operador"] --> Main["app.main"]
+    Main --> Config["Settings (.env)"]
+    Main --> DB["SQLAlchemy Engine"]
+    Main --> Orchestrator["ETLOrchestrator"]
+
+    Orchestrator --> Workers["ProcessPoolExecutor"]
+    Workers --> Loader["BulkRepository"]
+    Loader --> Staging["Tabelas staging"]
+    Staging --> Merge["Merge centralizado"]
+    Merge --> Final["Tabelas finais"]
+
+    Orchestrator --> Audit["ETLExecutionRepository"]
+    Audit --> Control["etl_execution"]
+
+    Loader --> Logs["Logs operacionais"]
+    Main --> Logs
+```
+
+Arquivo separado: [architecture.mmd](diagrams/architecture.mmd)
+
+## 4. Fluxo ETL
+
+```mermaid
+flowchart TD
+    Start["Início: python -m app.main"] --> Env["Carrega .env e valida diretórios"]
+    Env --> Files["Valida arquivos em INPUT_DIR"]
+    Files --> CreateDB["Cria tabelas ORM se necessário"]
+    CreateDB --> Empresa["Processa empresa"]
+    Empresa --> Estab["Processa estabelecimento"]
+    Estab --> Socio["Processa socio"]
+    Socio --> End["Finaliza pipeline"]
+
+    subgraph TablePipeline["Pipeline por tipo de arquivo"]
+        TruncateStaging["TRUNCATE staging"]
+        ParallelLoad["Carga paralela dos arquivos"]
+        LoadData["LOAD DATA LOCAL INFILE"]
+        MergeStrategy{"MERGE_STRATEGY"}
+        FullRefresh["TRUNCATE tabela final + INSERT SELECT"]
+        Upsert["INSERT ... ON DUPLICATE KEY UPDATE"]
+        TruncateStaging --> ParallelLoad --> LoadData --> MergeStrategy
+        MergeStrategy --> FullRefresh
+        MergeStrategy --> Upsert
+    end
+```
+
+Arquivo separado: [etl-flow.mmd](diagrams/etl-flow.mmd)
+
+## 5. Sequência de Carga
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Main as app.main
+    participant Orc as ETLOrchestrator
+    participant Worker as Worker process
+    participant Repo as BulkRepository
+    participant DB as MySQL/MariaDB
+
+    Main->>Orc: run()
+    Orc->>Repo: truncate_table("*_staging")
+    Repo->>DB: TRUNCATE TABLE staging
+    Orc->>Worker: process_file_task(file)
+    Worker->>Repo: load_file_to_staging()
+    Repo->>DB: LOAD DATA LOCAL INFILE
+    DB-->>Repo: linhas carregadas
+    Worker-->>Orc: sucesso ou erro
+    Orc->>Repo: merge_*()
+    alt MERGE_STRATEGY=full_refresh
+        Repo->>DB: TRUNCATE tabela final
+        Repo->>DB: INSERT SELECT FROM staging
+    else MERGE_STRATEGY=upsert
+        Repo->>DB: INSERT ... ON DUPLICATE KEY UPDATE
+    end
+    DB-->>Repo: commit
+    Orc-->>Main: pipeline finalizado
+```
+
+Arquivo separado: [sequence-load.mmd](diagrams/sequence-load.mmd)
+
+## 6. Modelo Entidade-Relacionamento
+
+As principais chaves de ligação da base são:
+
+- `empresa.cnpj_basico`
+- `estabelecimento.cnpj_basico`
+- `socio.cnpj_basico`
+- `simples.cnpj_basico`
+
+```mermaid
+erDiagram
+    EMPRESA {
+        string cnpj_basico PK
+        string razao_social
+        int natureza_juridica
+        int qualificacao_responsavel
+        float capital_social
+        int porte_empresa
+        string ente_federativo
+    }
+
+    ESTABELECIMENTO {
+        string cnpj_basico PK
+        string cnpj_ordem PK
+        string cnpj_dv PK
+        string nome_fantasia
+        string situacao_cadastral
+        string data_inicio_atividade
+        string cnae_fiscal_principal
+        string uf
+        string municipio
+        string email
+    }
+
+    SOCIO {
+        bigint id PK
+        string cnpj_basico FK
+        string identificador_socio
+        string nome_socio
+        string cpf_cnpj_socio
+        string qualificacao_socio
+        string data_entrada_sociedade
+    }
+
+    SIMPLES {
+        string cnpj_basico PK
+        string opcao_simples
+        string data_opcao_simples
+        string opcao_mei
+        string data_opcao_mei
+    }
+
+    CNAE {
+        string codigo PK
+        string descricao
+    }
+
+    MUNICIPIO {
+        string codigo PK
+        string descricao
+    }
+
+    PAIS {
+        string codigo PK
+        string descricao
+    }
+
+    NATUREZA_JURIDICA {
+        string codigo PK
+        string descricao
+    }
+
+    QUALIFICACAO_SOCIO {
+        string codigo PK
+        string descricao
+    }
+
+    MOTIVO_SITUACAO {
+        string codigo PK
+        string descricao
+    }
+
+    EMPRESA ||--o{ ESTABELECIMENTO : "cnpj_basico"
+    EMPRESA ||--o{ SOCIO : "cnpj_basico"
+    EMPRESA ||--o| SIMPLES : "cnpj_basico"
+    ESTABELECIMENTO }o--|| CNAE : "cnae_fiscal_principal"
+    ESTABELECIMENTO }o--|| MUNICIPIO : "municipio"
+    ESTABELECIMENTO }o--|| PAIS : "pais"
+    EMPRESA }o--|| NATUREZA_JURIDICA : "natureza_juridica"
+    SOCIO }o--|| QUALIFICACAO_SOCIO : "qualificacao_socio"
+    ESTABELECIMENTO }o--|| MOTIVO_SITUACAO : "motivo_situacao_cadastral"
+```
+
+Arquivo separado: [erd.mmd](diagrams/erd.mmd)
+
+## 7. Diagrama de Classes
+
+```mermaid
+classDiagram
+    class Settings {
+        DB_HOST
+        DB_PORT
+        DB_USER
+        DB_NAME
+        INPUT_DIR
+        LOG_DIR
+        LOAD_STRATEGY
+        MERGE_STRATEGY
+        MAX_WORKERS
+        create_dirs()
+    }
+
+    class ETLOrchestrator {
+        transformer
+        validator
+        deduplicator
+        chunk_size
+        run()
+        _run_parallel(tasks)
+        _load_files_to_staging(files, table_name)
+        _execute_pipeline(file_path, staging_model, columns, key, table_name)
+    }
+
+    class BulkRepository {
+        db
+        load_file_to_staging(table_name, file_path)
+        bulk_insert(model, data)
+        merge_empresa()
+        merge_estabelecimento()
+        merge_socio()
+        truncate_table(table_name)
+    }
+
+    class ETLExecutionRepository {
+        start()
+        success()
+        failed()
+        retry()
+        get_failed()
+        get_running()
+    }
+
+    class DataTransformer {
+        sanitize(df)
+    }
+
+    class Validator {
+        validate_empresa(df)
+        validate_estabelecimento(df)
+        validate_socio(df)
+    }
+
+    class Deduplicator {
+        drop_duplicates(df, keys)
+    }
+
+    class DatabaseOperationError {
+        operation
+        table_name
+        user_message
+        original_error
+    }
+
+    ETLOrchestrator --> Settings
+    ETLOrchestrator --> BulkRepository
+    ETLOrchestrator --> ETLExecutionRepository
+    ETLOrchestrator --> DataTransformer
+    ETLOrchestrator --> Validator
+    ETLOrchestrator --> Deduplicator
+    BulkRepository --> DatabaseOperationError
+```
+
+Arquivo separado: [class-diagram.mmd](diagrams/class-diagram.mmd)
+
+## 8. Componentes de Banco
+
+### Tabelas staging
+
+As tabelas staging recebem os dados brutos já normalizados minimamente pelo `LOAD DATA`:
+
+- `empresa_staging`
+- `estabelecimento_staging`
+- `socio_staging`
+
+Elas são truncadas antes de cada carga do respectivo tipo.
+
+### Tabelas finais
+
+As tabelas finais são otimizadas para consulta e relacionamento:
+
+- `empresa`
+- `estabelecimento`
+- `socio`
+- `simples`
+- tabelas auxiliares: `cnae`, `municipio`, `pais`, `natureza_juridica`, `qualificacao_socio`, `motivo_situacao`
+
+### Controle de execução
+
+A tabela `etl_execution` registra:
+
+- arquivo processado;
+- tabela alvo;
+- status (`STARTED`, `SUCCESS`, `FAILED`, `RETRY`);
+- quantidade de registros;
+- duração;
+- worker;
+- mensagem de erro.
+
+## 9. Estratégias de Carga
+
+### `LOAD_STRATEGY=load_data`
+
+Estratégia recomendada para grandes volumes. Usa `LOAD DATA LOCAL INFILE` para inserir arquivos diretamente nas tabelas staging.
+
+Requisitos:
+
+- `DB_LOCAL_INFILE=True` no `.env`;
+- `local_infile=ON` no MySQL/MariaDB;
+- permissão do usuário de banco para carga local;
+- arquivos acessíveis pelo processo Python.
+
+### `LOAD_STRATEGY=pandas`
+
+Estratégia de fallback. Lê arquivos em chunks com pandas e insere em lotes via SQLAlchemy. É mais lenta, mas pode ser útil quando `LOAD DATA LOCAL INFILE` não está disponível.
+
+### `MERGE_STRATEGY=full_refresh`
+
+Estratégia recomendada para reconstrução completa da base. Faz:
+
+1. `TRUNCATE` da tabela final.
+2. `INSERT SELECT` da staging para a tabela final.
+
+Vantagem: reduz custo de comparação linha a linha e evita `ON DUPLICATE KEY UPDATE`.
+
+Restrição: apaga a tabela final antes de recarregar.
+
+### `MERGE_STRATEGY=upsert`
+
+Mantém o comportamento incremental:
+
+```sql
+INSERT ...
+ON DUPLICATE KEY UPDATE ...
+```
+
+Vantagem: preserva registros existentes e atualiza conflitos.
+
+Restrição: mais lento em cargas completas e mais suscetível a lock timeout.
+
+## 10. Tratamento de Erros
+
+Erros de banco são convertidos em mensagens operacionais quando possível.
+
+### Erro 3948
+
+Indica `LOAD DATA LOCAL INFILE` desabilitado.
+
+Ação:
+
+```sql
+SHOW GLOBAL VARIABLES LIKE 'local_infile';
+SET GLOBAL local_infile = 1;
+```
+
+Também confirme:
+
+```env
+DB_LOCAL_INFILE=True
+```
+
+### Erro 1205
+
+Indica timeout aguardando lock.
+
+Ação:
+
+```sql
+SHOW FULL PROCESSLIST;
+KILL <id_da_sessao_bloqueadora>;
+```
+
+Também verifique:
+
+- execução antiga do ETL ainda ativa;
+- transação aberta no MySQL Workbench;
+- consulta longa sobre tabelas finais ou staging;
+- concorrência com outra carga.
+
+## 11. Observabilidade
+
+Os logs são gravados em:
+
+```text
+logs/app.log
+```
+
+O logger usa rotação de arquivo:
+
+- tamanho máximo: 5 MB;
+- backups: 5 arquivos.
+
+Durante o ETL são registrados:
+
+- início e fim da aplicação;
+- diretórios usados;
+- arquivos encontrados;
+- carga por arquivo;
+- registros carregados;
+- taxa aproximada de registros por segundo;
+- heartbeat;
+- CPU e RAM;
+- status da execução por arquivo.
+
+## 12. Performance
+
+Recomendações práticas:
+
+- usar SSD/NVMe para diretório de arquivos extraídos;
+- manter `LOAD_STRATEGY=load_data`;
+- usar `MERGE_STRATEGY=full_refresh` para carga completa;
+- ajustar `MAX_WORKERS` conforme CPU, disco e capacidade do banco;
+- evitar Workbench ou BI consultando as tabelas durante a carga;
+- criar índices após a carga quando o volume crescer e o tempo de insert virar gargalo;
+- manter `innodb_buffer_pool_size` compatível com a RAM disponível.
+
+## 13. Documentos e Diagramas Relacionados
+
+Arquivos existentes:
+
+- [Dados_RFB_ERD.png](Dados_RFB_ERD.png)
+- [Diagramas_UML.png](Diagramas_UML.png)
+- [NOVOLAYOUTDOSDADOSABERTOSDOCNPJ.pdf](NOVOLAYOUTDOSDADOSABERTOSDOCNPJ.pdf)
+- [ERD_Dados_RFB.pgerd](ERD_Dados_RFB.pgerd)
+
+Diagramas Mermaid adicionados:
+
+- [architecture.mmd](diagrams/architecture.mmd)
+- [etl-flow.mmd](diagrams/etl-flow.mmd)
+- [sequence-load.mmd](diagrams/sequence-load.mmd)
+- [erd.mmd](diagrams/erd.mmd)
+- [class-diagram.mmd](diagrams/class-diagram.mmd)

@@ -1,0 +1,25 @@
+sequenceDiagram
+    autonumber
+    participant Main as app.main
+    participant Orc as ETLOrchestrator
+    participant Worker as Worker process
+    participant Repo as BulkRepository
+    participant DB as MySQL/MariaDB
+
+    Main->>Orc: run()
+    Orc->>Repo: truncate_table("*_staging")
+    Repo->>DB: TRUNCATE TABLE staging
+    Orc->>Worker: process_file_task(file)
+    Worker->>Repo: load_file_to_staging()
+    Repo->>DB: LOAD DATA LOCAL INFILE
+    DB-->>Repo: linhas carregadas
+    Worker-->>Orc: sucesso ou erro
+    Orc->>Repo: merge_*()
+    alt MERGE_STRATEGY=full_refresh
+        Repo->>DB: TRUNCATE tabela final
+        Repo->>DB: INSERT SELECT FROM staging
+    else MERGE_STRATEGY=upsert
+        Repo->>DB: INSERT ... ON DUPLICATE KEY UPDATE
+    end
+    DB-->>Repo: commit
+    Orc-->>Main: pipeline finalizado

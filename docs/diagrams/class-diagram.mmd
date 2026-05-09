@@ -1,0 +1,72 @@
+classDiagram
+    class Settings {
+        DB_HOST
+        DB_PORT
+        DB_USER
+        DB_NAME
+        INPUT_DIR
+        LOG_DIR
+        LOAD_STRATEGY
+        MERGE_STRATEGY
+        MAX_WORKERS
+        create_dirs()
+    }
+
+    class ETLOrchestrator {
+        transformer
+        validator
+        deduplicator
+        chunk_size
+        run()
+        _run_parallel(tasks)
+        _load_files_to_staging(files, table_name)
+        _execute_pipeline(file_path, staging_model, columns, key, table_name)
+    }
+
+    class BulkRepository {
+        db
+        load_file_to_staging(table_name, file_path)
+        bulk_insert(model, data)
+        merge_empresa()
+        merge_estabelecimento()
+        merge_socio()
+        truncate_table(table_name)
+    }
+
+    class ETLExecutionRepository {
+        start()
+        success()
+        failed()
+        retry()
+        get_failed()
+        get_running()
+    }
+
+    class DataTransformer {
+        sanitize(df)
+    }
+
+    class Validator {
+        validate_empresa(df)
+        validate_estabelecimento(df)
+        validate_socio(df)
+    }
+
+    class Deduplicator {
+        drop_duplicates(df, keys)
+    }
+
+    class DatabaseOperationError {
+        operation
+        table_name
+        user_message
+        original_error
+    }
+
+    ETLOrchestrator --> Settings
+    ETLOrchestrator --> BulkRepository
+    ETLOrchestrator --> ETLExecutionRepository
+    ETLOrchestrator --> DataTransformer
+    ETLOrchestrator --> Validator
+    ETLOrchestrator --> Deduplicator
+    BulkRepository --> DatabaseOperationError

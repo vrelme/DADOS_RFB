@@ -1,0 +1,81 @@
+erDiagram
+    EMPRESA {
+        string cnpj_basico PK
+        string razao_social
+        int natureza_juridica
+        int qualificacao_responsavel
+        float capital_social
+        int porte_empresa
+        string ente_federativo
+    }
+
+    ESTABELECIMENTO {
+        string cnpj_basico PK
+        string cnpj_ordem PK
+        string cnpj_dv PK
+        string nome_fantasia
+        string situacao_cadastral
+        string data_inicio_atividade
+        string cnae_fiscal_principal
+        string uf
+        string municipio
+        string email
+    }
+
+    SOCIO {
+        bigint id PK
+        string cnpj_basico FK
+        string identificador_socio
+        string nome_socio
+        string cpf_cnpj_socio
+        string qualificacao_socio
+        string data_entrada_sociedade
+    }
+
+    SIMPLES {
+        string cnpj_basico PK
+        string opcao_simples
+        string data_opcao_simples
+        string opcao_mei
+        string data_opcao_mei
+    }
+
+    CNAE {
+        string codigo PK
+        string descricao
+    }
+
+    MUNICIPIO {
+        string codigo PK
+        string descricao
+    }
+
+    PAIS {
+        string codigo PK
+        string descricao
+    }
+
+    NATUREZA_JURIDICA {
+        string codigo PK
+        string descricao
+    }
+
+    QUALIFICACAO_SOCIO {
+        string codigo PK
+        string descricao
+    }
+
+    MOTIVO_SITUACAO {
+        string codigo PK
+        string descricao
+    }
+
+    EMPRESA ||--o{ ESTABELECIMENTO : "cnpj_basico"
+    EMPRESA ||--o{ SOCIO : "cnpj_basico"
+    EMPRESA ||--o| SIMPLES : "cnpj_basico"
+    ESTABELECIMENTO }o--|| CNAE : "cnae_fiscal_principal"
+    ESTABELECIMENTO }o--|| MUNICIPIO : "municipio"
+    ESTABELECIMENTO }o--|| PAIS : "pais"
+    EMPRESA }o--|| NATUREZA_JURIDICA : "natureza_juridica"
+    SOCIO }o--|| QUALIFICACAO_SOCIO : "qualificacao_socio"
+    ESTABELECIMENTO }o--|| MOTIVO_SITUACAO : "motivo_situacao_cadastral"
