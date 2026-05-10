@@ -3,6 +3,7 @@ import traceback
 from pathlib import Path
 
 from app.config import Settings
+from app.exceptions import AppError, DatabaseOperationError
 from app.logger import setup_logger
 from app.database import Base, engine
 from app.etl.orchestrator import ETLOrchestrator
@@ -104,6 +105,26 @@ def main():
         logger.info("=" * 70)
         logger.info(f"Processamento finalizado com sucesso em {total:.2f}s")
         logger.info("=" * 70)
+
+    except DatabaseOperationError as e:
+        logger.error("=" * 70)
+        logger.error("EXECUÇÃO INTERROMPIDA POR ERRO DE BANCO")
+        logger.error(f"Operação: {e.operation}")
+        logger.error(f"Tabela: {e.table_name}")
+        logger.error(e.user_message)
+        logger.error("Ação recomendada:")
+        logger.error("1. Pare outras execuções do ETL.")
+        logger.error("2. Feche consultas/transações abertas no Workbench.")
+        logger.error("3. Rode SHOW FULL PROCESSLIST e finalize sessões bloqueadoras.")
+        logger.error("4. Para carga completa, use MERGE_STRATEGY=full_refresh.")
+        logger.error(f"Erro original: {e.original_error}")
+        logger.error("=" * 70)
+
+    except AppError as e:
+        logger.error("=" * 70)
+        logger.error("EXECUÇÃO INTERROMPIDA")
+        logger.error(str(e))
+        logger.error("=" * 70)
 
     except Exception as e:
         logger.error("=" * 70)

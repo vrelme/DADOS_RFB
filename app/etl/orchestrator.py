@@ -17,6 +17,7 @@ from concurrent.futures import (
 )
 
 from app.config import Settings
+from app.exceptions import ETLPipelineError
 
 from app.database import SessionLocal
 
@@ -173,6 +174,7 @@ class ETLOrchestrator:
         )
 
         start_parallel = time.time()
+        errors = []
 
         with ProcessPoolExecutor(
             max_workers=Settings.MAX_WORKERS
@@ -198,6 +200,7 @@ class ETLOrchestrator:
                         f"Erro worker paralelo: {e}",
                         exc_info=True
                     )
+                    errors.append(e)
 
         elapsed = round(
             time.time() - start_parallel,
@@ -208,6 +211,13 @@ class ETLOrchestrator:
             f"PARALELISMO FINALIZADO "
             f"em {elapsed}s"
         )
+
+        if errors:
+            raise ETLPipelineError(
+                "Um ou mais workers falharam durante a carga staging. "
+                "O MERGE foi cancelado para evitar carga parcial. "
+                f"Falhas: {len(errors)}. Primeiro erro: {errors[0]}"
+            )
 
     def _load_files_to_staging(self, files, table_name):
 

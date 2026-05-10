@@ -73,3 +73,7 @@ pip install -r requirements.txt
 
 ### Diagramas UML:
 ![alt text](https://github.com/vrelme/DADOS_RFB/blob/dev/Diagramas_UML.png)
+
+### Documentação técnica:
+- [Documentação da aplicação](docs/APPLICATION_DOCUMENTATION.md)
+- [Diagramas Mermaid](docs/diagrams)

@@ -1,0 +1,20 @@
+flowchart TD
+    Start["Início: python -m app.main"] --> Env["Carrega .env e valida diretórios"]
+    Env --> Files["Valida arquivos em INPUT_DIR"]
+    Files --> CreateDB["Cria tabelas ORM se necessário"]
+    CreateDB --> Empresa["Processa empresa"]
+    Empresa --> Estab["Processa estabelecimento"]
+    Estab --> Socio["Processa socio"]
+    Socio --> End["Finaliza pipeline"]
+
+    subgraph TablePipeline["Pipeline por tipo de arquivo"]
+        TruncateStaging["TRUNCATE staging"]
+        ParallelLoad["Carga paralela dos arquivos"]
+        LoadData["LOAD DATA LOCAL INFILE"]
+        MergeStrategy{"MERGE_STRATEGY"}
+        FullRefresh["TRUNCATE tabela final + INSERT SELECT"]
+        Upsert["INSERT ... ON DUPLICATE KEY UPDATE"]
+        TruncateStaging --> ParallelLoad --> LoadData --> MergeStrategy
+        MergeStrategy --> FullRefresh
+        MergeStrategy --> Upsert
+    end
