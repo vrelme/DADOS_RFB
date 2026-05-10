@@ -42,6 +42,18 @@ class Settings:
 
     DB_NAME = os.getenv("DB_NAME", "rfb_loader")
 
+    IMPORT_DB_NAME = os.getenv("IMPORT_DB_NAME", f"{DB_NAME}_import")
+
+    SYNC_STRATEGY = os.getenv("SYNC_STRATEGY", "full_refresh").lower()
+
+    RAW_IMPORT_STRATEGIES = {"raw_import", "import_only"}
+
+    ACTIVE_DB_NAME = (
+        IMPORT_DB_NAME
+        if SYNC_STRATEGY in RAW_IMPORT_STRATEGIES
+        else DB_NAME
+    )
+
     DB_CHARSET = os.getenv("DB_CHARSET", "utf8mb4")
 
     # =====================================================
@@ -50,7 +62,7 @@ class Settings:
     DATABASE_URL = (
         f"{DB_DRIVER}://"
         f"{DB_USER}:{DB_PASSWORD}"
-        f"@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+        f"@{DB_HOST}:{DB_PORT}/{ACTIVE_DB_NAME}"
         f"?charset={DB_CHARSET}"
     )
 
@@ -118,12 +130,10 @@ class Settings:
     MERGE_STRATEGY = os.getenv("MERGE_STRATEGY", "full_refresh").lower()
 
     # staging: carrega staging e depois faz merge; final: carrega direto nas tabelas finais.
-    LOAD_TARGET = os.getenv("LOAD_TARGET", "staging").lower()
-
-    # full_refresh: banco principal e substituicao completa; delta_snapshot: banco de importacao + comparacao.
-    SYNC_STRATEGY = os.getenv("SYNC_STRATEGY", "full_refresh").lower()
-
-    IMPORT_DB_NAME = os.getenv("IMPORT_DB_NAME", f"{DB_NAME}_import")
+    LOAD_TARGET = os.getenv(
+        "LOAD_TARGET",
+        "final" if SYNC_STRATEGY in RAW_IMPORT_STRATEGIES else "staging"
+    ).lower()
 
     ENABLE_ADAPTIVE_WORKERS = (
         os.getenv("ENABLE_ADAPTIVE_WORKERS", "False").lower() == "true"

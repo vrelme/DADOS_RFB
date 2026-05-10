@@ -3,8 +3,17 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 
 from app.config import Settings
 
+def build_server_url():
+    return (
+        f"{Settings.DB_DRIVER}://"
+        f"{Settings.DB_USER}:{Settings.DB_PASSWORD}"
+        f"@{Settings.DB_HOST}:{Settings.DB_PORT}/"
+        f"?charset={Settings.DB_CHARSET}"
+    )
+
+
 def build_database_url(database_name=None):
-    db_name = database_name or Settings.DB_NAME
+    db_name = database_name or Settings.ACTIVE_DB_NAME
     return (
         f"{Settings.DB_DRIVER}://"
         f"{Settings.DB_USER}:{Settings.DB_PASSWORD}"
@@ -25,6 +34,24 @@ def create_engine_for_database(database_name=None):
         pool_pre_ping=Settings.DB_POOL_PRE_PING,
         connect_args={"local_infile": Settings.DB_LOCAL_INFILE}
     )
+
+
+def ensure_database_exists(database_name=None):
+    db_name = database_name or Settings.ACTIVE_DB_NAME
+    server_engine = create_engine(
+        build_server_url(),
+        echo=Settings.ORM_ECHO,
+        future=Settings.ORM_FUTURE,
+        pool_pre_ping=Settings.DB_POOL_PRE_PING,
+        connect_args={"local_infile": Settings.DB_LOCAL_INFILE},
+    )
+    safe_name = db_name.replace("`", "``")
+    with server_engine.begin() as conn:
+        conn.exec_driver_sql(
+            f"CREATE DATABASE IF NOT EXISTS `{safe_name}` "
+            f"CHARACTER SET {Settings.DB_CHARSET}"
+        )
+    server_engine.dispose()
 
 
 # =====================================================

@@ -7,7 +7,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.config import Settings
 from app.exceptions import AppError, DatabaseOperationError
 from app.logger import setup_logger
-from app.database import Base, engine
+from app.database import Base, engine, ensure_database_exists
 from app.etl.orchestrator import ETLOrchestrator
 
 
@@ -67,6 +67,11 @@ def create_database(logger):
     """
     Cria tabelas ORM
     """
+    logger.info(f"Banco alvo.......: {Settings.ACTIVE_DB_NAME}")
+    logger.info(f"Estratégia sync..: {Settings.SYNC_STRATEGY}")
+    logger.info(f"Destino carga....: {Settings.LOAD_TARGET}")
+    logger.info("Criando banco se necessário...")
+    ensure_database_exists()
     logger.info("Criando estrutura banco...")
     Base.metadata.create_all(bind=engine)
 
