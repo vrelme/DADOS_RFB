@@ -43,6 +43,11 @@ class BulkRepository:
 
         return loaders[table_name](file_path)
 
+    def _target_table_name(self, table_name: str):
+        if Settings.LOAD_TARGET == "final":
+            return table_name
+        return f"{table_name}_staging"
+
     def load_empresa_file_to_staging(self, file_path: Path):
 
         columns = [
@@ -81,7 +86,7 @@ class BulkRepository:
         """
 
         return self._load_data_local_infile(
-            table_name="empresa_staging",
+            table_name=self._target_table_name("empresa"),
             file_path=file_path,
             columns=columns,
             set_clause=set_clause
@@ -132,7 +137,7 @@ class BulkRepository:
         )
 
         return self._load_data_local_infile(
-            table_name="estabelecimento_staging",
+            table_name=self._target_table_name("estabelecimento"),
             file_path=file_path,
             columns=columns,
             set_clause=set_clause
@@ -162,7 +167,7 @@ class BulkRepository:
         )
 
         return self._load_data_local_infile(
-            table_name="socio_staging",
+            table_name=self._target_table_name("socio"),
             file_path=file_path,
             columns=columns,
             set_clause=set_clause
@@ -255,6 +260,7 @@ class BulkRepository:
                 )
 
                 self._log_database_processes()
+                self._handle_lock_timeout(operation, table_name, e)
 
                 if attempt < Settings.MAX_RETRIES:
                     time.sleep(Settings.RETRY_DELAY)
@@ -882,6 +888,7 @@ class BulkRepository:
                 )
 
                 self._log_database_processes()
+                self._handle_lock_timeout("TRUNCATE", table_name, e)
 
                 if attempt == Settings.MAX_RETRIES:
                     logger.error(
@@ -895,6 +902,67 @@ class BulkRepository:
                     ) from e
 
                 time.sleep(Settings.RETRY_DELAY)
+
+    def _handle_lock_timeout(self, operation, table_name, error):
+
+        if self._mysql_error_code(error) != 1205:
+            return
+
+        if not Settings.AUTO_KILL_BLOCKING_SESSIONS:
+            return
+
+        killed = self._kill_blocking_sessions(table_name)
+
+        if killed:
+            logger.warning(
+                f"{operation} {table_name}: sessões bloqueadoras finalizadas: {killed}"
+            )
+            time.sleep(Settings.AUTO_KILL_WAIT_SECONDS)
+
+    def _kill_blocking_sessions(self, table_name: str):
+
+        killed = []
+
+        try:
+            current_id = self.db.execute(text("SELECT CONNECTION_ID()")).scalar()
+            result = self.db.execute(text("SHOW FULL PROCESSLIST"))
+
+            for row in result.mappings():
+                session_id = row.get("Id")
+                db_name = row.get("db") or row.get("Db")
+                seconds = int(row.get("Time") or 0)
+                info = str(row.get("Info") or "")
+                command = str(row.get("Command") or "")
+
+                if session_id == current_id:
+                    continue
+
+                if db_name != Settings.DB_NAME:
+                    continue
+
+                if seconds < Settings.AUTO_KILL_MIN_SECONDS:
+                    continue
+
+                if command.lower() in {"sleep", "binlog dump"}:
+                    continue
+
+                if table_name not in info and "_staging" not in info:
+                    continue
+
+                logger.warning(
+                    f"Finalizando sessão bloqueadora MySQL Id={session_id} | "
+                    f"Time={seconds}s | Info={info[:300]}"
+                )
+                self.db.execute(text(f"KILL {int(session_id)}"))
+                killed.append(session_id)
+
+            self.db.commit()
+
+        except SQLAlchemyError as e:
+            self.db.rollback()
+            logger.warning(f"Não foi possível finalizar sessões bloqueadoras: {e}")
+
+        return killed
 
     def _log_database_processes(self):
 

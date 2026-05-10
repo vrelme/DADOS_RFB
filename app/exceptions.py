@@ -46,3 +46,14 @@ class DatabaseOperationError(DatabaseError):
         super().__init__(
             f"{operation} em {table_name} falhou. {user_message}"
         )
+
+    def __reduce__(self):
+        return (
+            self.__class__,
+            (
+                self.operation,
+                self.table_name,
+                self.user_message,
+                self.original_error,
+            ),
+        )

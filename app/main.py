@@ -2,6 +2,8 @@ import time
 import traceback
 from pathlib import Path
 
+from sqlalchemy.exc import SQLAlchemyError
+
 from app.config import Settings
 from app.exceptions import AppError, DatabaseOperationError
 from app.logger import setup_logger
@@ -79,6 +81,12 @@ def run_etl(logger):
     orchestrator.run()
 
 
+def mysql_error_code(error):
+    original = getattr(error, "orig", None)
+    args = getattr(original, "args", None)
+    return args[0] if args else None
+
+
 def main():
     logger = setup_logger()
     start = time.time()
@@ -124,6 +132,17 @@ def main():
         logger.error("=" * 70)
         logger.error("EXECUÇÃO INTERROMPIDA")
         logger.error(str(e))
+        logger.error("=" * 70)
+
+    except SQLAlchemyError as e:
+        logger.error("=" * 70)
+        logger.error("EXECUÇÃO INTERROMPIDA POR ERRO DE BANCO")
+        if mysql_error_code(e) == 2003:
+            logger.error("Não foi possível conectar ao MySQL/MariaDB.")
+            logger.error("Verifique se o serviço está iniciado e se DB_HOST/DB_PORT estão corretos.")
+        else:
+            logger.error(str(e))
+        logger.error(traceback.format_exc())
         logger.error("=" * 70)
 
     except Exception as e:

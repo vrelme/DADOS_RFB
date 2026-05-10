@@ -117,6 +117,36 @@ class Settings:
 
     MERGE_STRATEGY = os.getenv("MERGE_STRATEGY", "full_refresh").lower()
 
+    # staging: carrega staging e depois faz merge; final: carrega direto nas tabelas finais.
+    LOAD_TARGET = os.getenv("LOAD_TARGET", "staging").lower()
+
+    # full_refresh: banco principal e substituicao completa; delta_snapshot: banco de importacao + comparacao.
+    SYNC_STRATEGY = os.getenv("SYNC_STRATEGY", "full_refresh").lower()
+
+    IMPORT_DB_NAME = os.getenv("IMPORT_DB_NAME", f"{DB_NAME}_import")
+
+    ENABLE_ADAPTIVE_WORKERS = (
+        os.getenv("ENABLE_ADAPTIVE_WORKERS", "False").lower() == "true"
+    )
+
+    MIN_WORKERS = int(os.getenv("MIN_WORKERS", 1))
+
+    ADAPTIVE_CPU_HIGH = int(os.getenv("ADAPTIVE_CPU_HIGH", 85))
+
+    ADAPTIVE_RAM_HIGH = int(os.getenv("ADAPTIVE_RAM_HIGH", 85))
+
+    ADAPTIVE_CPU_LOW = int(os.getenv("ADAPTIVE_CPU_LOW", 45))
+
+    ADAPTIVE_RAM_LOW = int(os.getenv("ADAPTIVE_RAM_LOW", 65))
+
+    AUTO_KILL_BLOCKING_SESSIONS = (
+        os.getenv("AUTO_KILL_BLOCKING_SESSIONS", "False").lower() == "true"
+    )
+
+    AUTO_KILL_MIN_SECONDS = int(os.getenv("AUTO_KILL_MIN_SECONDS", 300))
+
+    AUTO_KILL_WAIT_SECONDS = int(os.getenv("AUTO_KILL_WAIT_SECONDS", 10))
+
     # =====================================================
     # STAGING
     # =====================================================

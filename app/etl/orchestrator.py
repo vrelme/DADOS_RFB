@@ -4,6 +4,7 @@ import time
 import socket
 import logging
 import threading
+import traceback
 
 import psutil
 import numpy as np
@@ -15,6 +16,7 @@ from concurrent.futures import (
     ProcessPoolExecutor,
     as_completed
 )
+from concurrent.futures.process import BrokenProcessPool
 
 from app.config import Settings
 
@@ -58,13 +60,19 @@ def process_file_task(args):
 
     orchestrator = ETLOrchestrator()
 
-    orchestrator._execute_pipeline(
-        file_path=file_path,
-        staging_model=staging_model,
-        columns=columns,
-        key=key,
-        table_name=table_name
-    )
+    try:
+        orchestrator._execute_pipeline(
+            file_path=file_path,
+            staging_model=staging_model,
+            columns=columns,
+            key=key,
+            table_name=table_name
+        )
+    except Exception as exc:
+        details = traceback.format_exc()
+        raise RuntimeError(
+            f"Worker falhou ao processar {Path(file_path).name}: {exc}\n{details}"
+        ) from None
 
 
 # =====================================================
@@ -164,50 +172,96 @@ class ETLOrchestrator:
 
             return
 
+        if Settings.ENABLE_ADAPTIVE_WORKERS:
+            return self._run_parallel_adaptive(tasks)
+
+        return self._run_parallel_batch(tasks, Settings.MAX_WORKERS)
+
+    def _run_parallel_adaptive(self, tasks):
+
+        pending = list(tasks)
+        completed = 0
+        start_parallel = time.time()
+
+        self.logger.info(f"{len(tasks)} arquivos encontrados")
+
+        while pending:
+            workers = self._calculate_worker_count()
+            wave = pending[:workers]
+            pending = pending[workers:]
+
+            self.logger.info(
+                f"Workers adaptativos: {workers} | pendentes={len(pending)}"
+            )
+
+            self._run_parallel_batch(wave, workers, log_summary=False)
+            completed += len(wave)
+
+        elapsed = round(time.time() - start_parallel, 2)
+        self.logger.info("-" * 80)
         self.logger.info(
-            f"{len(tasks)} arquivos encontrados"
+            f"PARALELISMO ADAPTATIVO FINALIZADO | "
+            f"arquivos={completed} | {elapsed}s"
         )
 
-        self.logger.info(
-            f"Workers: {Settings.MAX_WORKERS}"
-        )
+    def _calculate_worker_count(self):
+
+        cpu = psutil.cpu_percent(interval=1)
+        ram = psutil.virtual_memory().percent
+        workers = Settings.MAX_WORKERS
+
+        if cpu >= Settings.ADAPTIVE_CPU_HIGH or ram >= Settings.ADAPTIVE_RAM_HIGH:
+            workers = max(Settings.MIN_WORKERS, Settings.MAX_WORKERS - 1)
+        elif cpu <= Settings.ADAPTIVE_CPU_LOW and ram <= Settings.ADAPTIVE_RAM_LOW:
+            workers = Settings.MAX_WORKERS
+
+        return max(Settings.MIN_WORKERS, min(workers, Settings.MAX_WORKERS))
+
+    def _run_parallel_batch(self, tasks, workers, log_summary=True):
+
+        self.logger.info(f"Workers: {workers}")
 
         start_parallel = time.time()
 
-        with ProcessPoolExecutor(
-            max_workers=Settings.MAX_WORKERS
-        ) as executor:
+        try:
+            with ProcessPoolExecutor(max_workers=workers) as executor:
 
-            futures = [
-                executor.submit(
-                    process_file_task,
-                    task
+                futures = [
+                    executor.submit(process_file_task, task)
+                    for task in tasks
+                ]
+
+                for future in as_completed(futures):
+
+                    try:
+                        future.result()
+
+                    except BrokenProcessPool as e:
+                        self.logger.error(
+                            "Pool de workers encerrado inesperadamente. "
+                            "Em Windows isso normalmente indica erro não serializável "
+                            "ou falha fatal dentro do worker.",
+                            exc_info=True
+                        )
+                        raise RuntimeError(
+                            "Falha no processamento paralelo. "
+                            "Execute temporariamente ENABLE_PARALLELISM=False para isolar o arquivo."
+                        ) from e
+
+                    except Exception as e:
+                        self.logger.error(
+                            f"Erro worker paralelo: {e}",
+                            exc_info=True
+                        )
+                        raise
+
+        finally:
+            if log_summary:
+                elapsed = round(time.time() - start_parallel, 2)
+                self.logger.info("-" * 80)
+                self.logger.info(
+                    f"PARALELISMO FINALIZADO em {elapsed}s"
                 )
-                for task in tasks
-            ]
-
-            for future in as_completed(futures):
-
-                try:
-
-                    future.result()
-
-                except Exception as e:
-
-                    self.logger.error(
-                        f"Erro worker paralelo: {e}",
-                        exc_info=True
-                    )
-
-        elapsed = round(
-            time.time() - start_parallel,
-            2
-        )
-        self.logger.info("-" * 80)
-        self.logger.info(
-            f"PARALELISMO FINALIZADO "
-            f"em {elapsed}s"
-        )
 
     def _load_files_to_staging(self, files, table_name):
 
@@ -238,6 +292,14 @@ class ETLOrchestrator:
                     table_name=table_name
                 )
 
+    def _target_table_for_load(self, table_name):
+        if Settings.LOAD_TARGET == "final":
+            return table_name
+        return f"{table_name}_staging"
+
+    def _should_merge_after_load(self):
+        return Settings.LOAD_TARGET != "final"
+
     # =====================================================
     # EMPRESA
     # =====================================================
@@ -256,11 +318,11 @@ class ETLOrchestrator:
             truncate_start = time.time()  # <- incluída no código
 
             repo.truncate_table(
-                "empresa_staging"
+                self._target_table_for_load("empresa")
             )
 
             self.logger.info(  # <- incluída no código
-                f"TRUNCATE empresa_staging "
+                f"TRUNCATE {self._target_table_for_load("empresa")} "
                 f"concluído em "
                 f"{round(time.time()-truncate_start,2)}s"
             )
@@ -316,12 +378,15 @@ class ETLOrchestrator:
 
             merge_start = time.time()
 
-            repo.merge_empresa()
+            if self._should_merge_after_load():
+                repo.merge_empresa()
 
-            self.logger.info(
-                f"MERGE empresa concluído "
-                f"em {round(time.time()-merge_start,2)}s"
-            )
+                self.logger.info(
+                    f"MERGE empresa concluído "
+                    f"em {round(time.time()-merge_start,2)}s"
+                )
+            else:
+                self.logger.info("LOAD_TARGET=final: merge empresa ignorado")
 
         finally:
 
@@ -345,11 +410,11 @@ class ETLOrchestrator:
             truncate_start = time.time()
 
             repo.truncate_table(
-                "estabelecimento_staging"
+                self._target_table_for_load("estabelecimento")
             )
 
             self.logger.info(
-                f"TRUNCATE estabelecimento_staging "
+                f"TRUNCATE {self._target_table_for_load("estabelecimento")} "
                 f"concluído em "
                 f"{round(time.time()-truncate_start,2)}s"
             )
@@ -426,13 +491,16 @@ class ETLOrchestrator:
 
             merge_start = time.time()
 
-            repo.merge_estabelecimento()
+            if self._should_merge_after_load():
+                repo.merge_estabelecimento()
 
-            self.logger.info(
-                f"MERGE estabelecimento "
-                f"concluído em "
-                f"{round(time.time()-merge_start,2)}s"
-            )
+                self.logger.info(
+                    f"MERGE estabelecimento "
+                    f"concluído em "
+                    f"{round(time.time()-merge_start,2)}s"
+                )
+            else:
+                self.logger.info("LOAD_TARGET=final: merge estabelecimento ignorado")
 
         finally:
 
@@ -456,11 +524,11 @@ class ETLOrchestrator:
             truncate_start = time.time()
 
             repo.truncate_table(
-                "socio_staging"
+                self._target_table_for_load("socio")
             )
 
             self.logger.info(
-                f"TRUNCATE socio_staging "
+                f"TRUNCATE {self._target_table_for_load("socio")} "
                 f"concluído em "
                 f"{round(time.time()-truncate_start,2)}s"
             )
@@ -514,12 +582,15 @@ class ETLOrchestrator:
 
             merge_start = time.time()
 
-            repo.merge_socio()
+            if self._should_merge_after_load():
+                repo.merge_socio()
 
-            self.logger.info(
-                f"MERGE socio concluído "
-                f"em {round(time.time()-merge_start,2)}s"
-            )
+                self.logger.info(
+                    f"MERGE socio concluído "
+                    f"em {round(time.time()-merge_start,2)}s"
+                )
+            else:
+                self.logger.info("LOAD_TARGET=final: merge socio ignorado")
 
         finally:
 
