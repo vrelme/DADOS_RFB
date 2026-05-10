@@ -8,6 +8,12 @@ from app.config import Settings
 from app.exceptions import AppError, DatabaseOperationError
 from app.logger import setup_logger
 from app.database import Base, engine, ensure_database_exists
+from app.models import (
+    Empresa,
+    Estabelecimento,
+    Socio,
+    ETLExecution,
+)
 from app.etl.orchestrator import ETLOrchestrator
 
 
@@ -63,6 +69,18 @@ def validate_input_files(logger):
     return True
 
 
+def tables_for_current_strategy():
+    if Settings.SYNC_STRATEGY in Settings.RAW_IMPORT_STRATEGIES:
+        return [
+            Empresa.__table__,
+            Estabelecimento.__table__,
+            Socio.__table__,
+            ETLExecution.__table__,
+        ]
+
+    return None
+
+
 def create_database(logger):
     """
     Cria tabelas ORM
@@ -73,7 +91,12 @@ def create_database(logger):
     logger.info("Criando banco se necessário...")
     ensure_database_exists()
     logger.info("Criando estrutura banco...")
-    Base.metadata.create_all(bind=engine)
+    tables = tables_for_current_strategy()
+    Base.metadata.create_all(bind=engine, tables=tables)
+
+    if tables:
+        table_names = ", ".join(table.name for table in tables)
+        logger.info(f"Tabelas criadas/verificadas: {table_names}")
 
 
 def run_etl(logger):
