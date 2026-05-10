@@ -1,0 +1,17 @@
+flowchart LR
+    User["Operador"] --> Main["app.main"]
+    Main --> Config["Settings (.env)"]
+    Main --> DB["SQLAlchemy Engine"]
+    Main --> Orchestrator["ETLOrchestrator"]
+
+    Orchestrator --> Workers["ProcessPoolExecutor"]
+    Workers --> Loader["BulkRepository"]
+    Loader --> Staging["Tabelas staging"]
+    Staging --> Merge["Merge centralizado"]
+    Merge --> Final["Tabelas finais"]
+
+    Orchestrator --> Audit["ETLExecutionRepository"]
+    Audit --> Control["etl_execution"]
+
+    Loader --> Logs["Logs operacionais"]
+    Main --> Logs
