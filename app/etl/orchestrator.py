@@ -452,9 +452,11 @@ class ETLOrchestrator:
     # =====================================================
     def _process_empresa(self):
 
+        self.logger.info("-" * 80)
         self.logger.info(
             "PROCESSANDO EMPRESA"
         )
+        self.logger.info("-" * 80)
 
         phase = self._start_phase("LOAD_EMPRESA", table_name="empresa")
 
@@ -545,9 +547,11 @@ class ETLOrchestrator:
     # =====================================================
     def _process_estabelecimento(self):
 
+        self.logger.info("-" * 80)
         self.logger.info(
             "PROCESSANDO ESTABELECIMENTO"
         )
+        self.logger.info("-" * 80)
 
         phase = self._start_phase("LOAD_ESTABELECIMENTO", table_name="estabelecimento")
 
@@ -660,9 +664,11 @@ class ETLOrchestrator:
     # =====================================================
     def _process_socio(self):
 
+        self.logger.info("-" * 80)
         self.logger.info(
             "PROCESSANDO SOCIO"
         )
+        self.logger.info("-" * 80)
 
         phase = self._start_phase("LOAD_SOCIO", table_name="socio")
 
@@ -776,9 +782,11 @@ class ETLOrchestrator:
 
         try:
 
+            self.logger.info("-" * 80)
             self.logger.info(
                 f"PROCESSANDO: {file_path.name}"
             )
+            self.logger.info("-" * 80)
 
             if (
                 Settings.ENABLE_CHECKPOINT_RESUME
