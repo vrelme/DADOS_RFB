@@ -447,6 +447,30 @@ class ETLOrchestrator:
     def _should_merge_after_load(self):
         return Settings.LOAD_TARGET != "final"
 
+    def _should_truncate_before_load(self):
+        return not (
+            Settings.SYNC_STRATEGY in Settings.RAW_IMPORT_STRATEGIES
+            and Settings.IMPORT_DB_PER_RUN
+            and Settings.LOAD_TARGET == "final"
+        )
+
+    def _truncate_target_if_needed(self, repo, table_name):
+        target_table = self._target_table_for_load(table_name)
+
+        if not self._should_truncate_before_load():
+            self.logger.info(
+                f"RAW_IMPORT banco por execução ativo: TRUNCATE {target_table} ignorado | "
+                f"db={Settings.ACTIVE_DB_NAME}"
+            )
+            return
+
+        truncate_start = time.time()
+        repo.truncate_table(target_table)
+        self.logger.info(
+            f"TRUNCATE {target_table} concluído em "
+            f"{round(time.time()-truncate_start,2)}s"
+        )
+
     # =====================================================
     # EMPRESA
     # =====================================================
@@ -466,17 +490,7 @@ class ETLOrchestrator:
 
             repo = BulkRepository(db)
 
-            truncate_start = time.time()  # <- incluída no código
-
-            repo.truncate_table(
-                self._target_table_for_load("empresa")
-            )
-
-            self.logger.info(  # <- incluída no código
-                f"TRUNCATE {self._target_table_for_load('empresa')} "
-                f"concluído em "
-                f"{round(time.time()-truncate_start,2)}s"
-            )
+            self._truncate_target_if_needed(repo, "empresa")
 
         finally:
 
@@ -561,17 +575,7 @@ class ETLOrchestrator:
 
             repo = BulkRepository(db)
 
-            truncate_start = time.time()
-
-            repo.truncate_table(
-                self._target_table_for_load("estabelecimento")
-            )
-
-            self.logger.info(
-                f"TRUNCATE {self._target_table_for_load('estabelecimento')} "
-                f"concluído em "
-                f"{round(time.time()-truncate_start,2)}s"
-            )
+            self._truncate_target_if_needed(repo, "estabelecimento")
 
         finally:
 
@@ -678,17 +682,7 @@ class ETLOrchestrator:
 
             repo = BulkRepository(db)
 
-            truncate_start = time.time()
-
-            repo.truncate_table(
-                self._target_table_for_load("socio")
-            )
-
-            self.logger.info(
-                f"TRUNCATE {self._target_table_for_load('socio')} "
-                f"concluído em "
-                f"{round(time.time()-truncate_start,2)}s"
-            )
+            self._truncate_target_if_needed(repo, "socio")
 
         finally:
 
