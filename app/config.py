@@ -185,6 +185,13 @@ class Settings:
         )
     )
 
+    EXTRACT_DIR = Path(
+        os.getenv(
+            "EXTRACT_DIR",
+            BASE_DIR / "data" / "extracted"
+        )
+    )
+
     ERROR_DIR = Path(
         os.getenv(
             "ERROR_DIR",
@@ -197,6 +204,29 @@ class Settings:
             "LOG_DIR",
             BASE_DIR / "logs"
         )
+    )
+
+    # =====================================================
+    # V3 FEATURES
+    # =====================================================
+    ENABLE_ZIP_PROCESSING = (
+        os.getenv("ENABLE_ZIP_PROCESSING", "True").lower() == "true"
+    )
+
+    ENABLE_CHECKPOINT_RESUME = (
+        os.getenv("ENABLE_CHECKPOINT_RESUME", "True").lower() == "true"
+    )
+
+    ENABLE_DLQ = (
+        os.getenv("ENABLE_DLQ", "True").lower() == "true"
+    )
+
+    ENABLE_DATA_QUALITY_RULES = (
+        os.getenv("ENABLE_DATA_QUALITY_RULES", "True").lower() == "true"
+    )
+
+    ENABLE_OTEL_TRACING = (
+        os.getenv("ENABLE_OTEL_TRACING", "False").lower() == "true"
     )
 
     # =====================================================
@@ -240,6 +270,8 @@ class Settings:
         cls.INPUT_DIR.mkdir(parents=True, exist_ok=True)
 
         cls.PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+
+        cls.EXTRACT_DIR.mkdir(parents=True, exist_ok=True)
 
         cls.ERROR_DIR.mkdir(parents=True, exist_ok=True)
 

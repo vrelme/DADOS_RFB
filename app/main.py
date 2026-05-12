@@ -13,6 +13,13 @@ from app.models import (
     Estabelecimento,
     Socio,
     ETLExecution,
+    ETLRun,
+    ETLRunPhase,
+    ETLFileProgress,
+    ETLMetric,
+    ETLCheckpoint,
+    ETLDeadLetter,
+    DataQualityRule,
 )
 from app.etl.orchestrator import ETLOrchestrator
 
@@ -76,6 +83,13 @@ def tables_for_current_strategy():
             Estabelecimento.__table__,
             Socio.__table__,
             ETLExecution.__table__,
+            ETLRun.__table__,
+            ETLRunPhase.__table__,
+            ETLFileProgress.__table__,
+            ETLMetric.__table__,
+            ETLCheckpoint.__table__,
+            ETLDeadLetter.__table__,
+            DataQualityRule.__table__,
         ]
 
     return None

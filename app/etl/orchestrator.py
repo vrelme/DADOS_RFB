@@ -5,6 +5,7 @@ import socket
 import logging
 import threading
 import traceback
+import zipfile
 
 import psutil
 import numpy as np
@@ -41,6 +42,7 @@ from app.etl.bulk_repository import BulkRepository
 from app.etl.etl_execution_repository import (
     ETLExecutionRepository
 )
+from app.etl.observability_repository import ObservabilityRepository
 
 logger = logging.getLogger(__name__)
 
@@ -50,15 +52,26 @@ logger = logging.getLogger(__name__)
 # =====================================================
 def process_file_task(args):
 
-    (
-        file_path,
-        staging_model,
-        columns,
-        key,
-        table_name
-    ) = args
+    if len(args) == 6:
+        (
+            file_path,
+            staging_model,
+            columns,
+            key,
+            table_name,
+            run_id,
+        ) = args
+    else:
+        (
+            file_path,
+            staging_model,
+            columns,
+            key,
+            table_name
+        ) = args
+        run_id = None
 
-    orchestrator = ETLOrchestrator()
+    orchestrator = ETLOrchestrator(run_id=run_id)
 
     try:
         orchestrator._execute_pipeline(
@@ -80,9 +93,11 @@ def process_file_task(args):
 # =====================================================
 class ETLOrchestrator:
 
-    def __init__(self, logger_instance=None):
+    def __init__(self, logger_instance=None, run_id=None):
 
         self.logger = logger_instance or logger
+
+        self.run_id = run_id
 
         self.transformer = DataTransformer()
 
@@ -102,6 +117,13 @@ class ETLOrchestrator:
             self.logger.info(
                 "HEARTBEAT | ETL em execução..."
             )
+
+            if self.run_id:
+                db = SessionLocal()
+                try:
+                    ObservabilityRepository(db).heartbeat_run(self.run_id)
+                finally:
+                    db.close()
 
             time.sleep(60)
 
@@ -133,6 +155,9 @@ class ETLOrchestrator:
 
         Settings.create_dirs()
 
+        if not self.run_id:
+            self.run_id = self._start_run()
+
         # =============================================
         # HEARTBEAT THREAD
         # =============================================
@@ -149,15 +174,103 @@ class ETLOrchestrator:
             daemon=True                     # <- incluída no código
         ).start()
 
-        self._process_empresa()
+        try:
+            self._process_empresa()
 
-        self._process_estabelecimento()
+            self._process_estabelecimento()
 
-        self._process_socio()
+            self._process_socio()
 
-        self.logger.info("=" * 80)
-        self.logger.info("PIPELINE FINALIZADO")
-        self.logger.info("=" * 80)
+            self._finish_run("SUCCESS")
+
+            self.logger.info("=" * 80)
+            self.logger.info("PIPELINE FINALIZADO")
+            self.logger.info("=" * 80)
+
+        except Exception as exc:
+            self._finish_run("FAILED", str(exc))
+            raise
+
+    def _all_input_files_count(self):
+        patterns = ["*.EMPRECSV", "*.ESTABELE", "*.SOCIOCSV"]
+        total = 0
+        for pattern in patterns:
+            total += len(self._discover_files(pattern))
+        return total
+
+    def _start_run(self):
+        db = SessionLocal()
+        try:
+            repo = ObservabilityRepository(db)
+            run = repo.start_run(
+                pipeline="RFB_LOADER_ENTERPRISE",
+                sync_strategy=Settings.SYNC_STRATEGY,
+                load_target=Settings.LOAD_TARGET,
+                active_database=Settings.ACTIVE_DB_NAME,
+                total_files=self._all_input_files_count(),
+            )
+            self.logger.info(
+                f"ETL RUN START | id={run.id} | arquivos={run.total_files} | "
+                f"db={Settings.ACTIVE_DB_NAME}"
+            )
+            return run.id
+        finally:
+            db.close()
+
+    def _finish_run(self, status, error_message=None):
+        if not self.run_id:
+            return
+        db = SessionLocal()
+        try:
+            ObservabilityRepository(db).finish_run(
+                self.run_id,
+                status=status,
+                error_message=error_message,
+            )
+            self.logger.info(f"ETL RUN {status} | id={self.run_id}")
+        finally:
+            db.close()
+
+    def _start_phase(self, phase_name, table_name=None, message=None):
+        if not self.run_id:
+            return None
+        db = SessionLocal()
+        try:
+            return ObservabilityRepository(db).start_phase(
+                self.run_id,
+                phase_name,
+                table_name=table_name,
+                message=message,
+            )
+        finally:
+            db.close()
+
+    def _finish_phase(self, phase, status="SUCCESS", message=None):
+        if not phase:
+            return
+        db = SessionLocal()
+        try:
+            ObservabilityRepository(db).finish_phase(
+                phase,
+                status=status,
+                message=message,
+            )
+        finally:
+            db.close()
+
+    def _update_run_context(self, phase=None, table_name=None, file_name=None):
+        if not self.run_id:
+            return
+        db = SessionLocal()
+        try:
+            ObservabilityRepository(db).update_run_context(
+                self.run_id,
+                phase=phase,
+                table_name=table_name,
+                file_name=file_name,
+            )
+        finally:
+            db.close()
 
     # =====================================================
     # PARALELISMO
@@ -276,7 +389,7 @@ class ETLOrchestrator:
             and Settings.ENABLE_PARALLELISM
         ):
             tasks = [
-                (file, None, None, None, table_name)
+                (file, None, None, None, table_name, self.run_id)
                 for file in files
             ]
             self._run_parallel(tasks)
@@ -291,6 +404,40 @@ class ETLOrchestrator:
                     key=None,
                     table_name=table_name
                 )
+
+    def _extract_zip_files(self):
+
+        if not Settings.ENABLE_ZIP_PROCESSING:
+            return
+
+        zip_files = list(Path(Settings.INPUT_DIR).glob("*.zip"))
+
+        for zip_path in zip_files:
+            target_dir = Path(Settings.EXTRACT_DIR) / zip_path.stem
+            target_dir.mkdir(parents=True, exist_ok=True)
+
+            try:
+                with zipfile.ZipFile(zip_path) as archive:
+                    archive.extractall(target_dir)
+
+                self.logger.info(
+                    f"ZIP extraído | {zip_path.name} -> {target_dir}"
+                )
+
+            except zipfile.BadZipFile:
+                self.logger.error(f"ZIP inválido: {zip_path}")
+                raise
+
+    def _discover_files(self, pattern):
+
+        self._extract_zip_files()
+
+        files = list(Path(Settings.INPUT_DIR).glob(pattern))
+
+        if Settings.ENABLE_ZIP_PROCESSING:
+            files.extend(Path(Settings.EXTRACT_DIR).rglob(pattern))
+
+        return sorted(set(files))
 
     def _target_table_for_load(self, table_name):
         if Settings.LOAD_TARGET == "final":
@@ -309,6 +456,8 @@ class ETLOrchestrator:
             "PROCESSANDO EMPRESA"
         )
 
+        phase = self._start_phase("LOAD_EMPRESA", table_name="empresa")
+
         db = SessionLocal()
 
         try:
@@ -322,7 +471,7 @@ class ETLOrchestrator:
             )
 
             self.logger.info(  # <- incluída no código
-                f"TRUNCATE {self._target_table_for_load("empresa")} "
+                f"TRUNCATE {self._target_table_for_load('empresa')} "
                 f"concluído em "
                 f"{round(time.time()-truncate_start,2)}s"
             )
@@ -331,10 +480,7 @@ class ETLOrchestrator:
 
             db.close()
 
-        files = list(
-            Path(Settings.INPUT_DIR)
-            .glob("*.EMPRECSV")
-        )
+        files = self._discover_files("*.EMPRECSV")
 
         columns = [
             "cnpj_basico",
@@ -353,7 +499,8 @@ class ETLOrchestrator:
                 EmpresaStaging,
                 columns,
                 ["cnpj_basico"],
-                "empresa"
+                "empresa",
+                self.run_id
             )
 
             for file in files
@@ -391,6 +538,7 @@ class ETLOrchestrator:
         finally:
 
             db.close()
+            self._finish_phase(phase)
 
     # =====================================================
     # ESTABELECIMENTO
@@ -400,6 +548,8 @@ class ETLOrchestrator:
         self.logger.info(
             "PROCESSANDO ESTABELECIMENTO"
         )
+
+        phase = self._start_phase("LOAD_ESTABELECIMENTO", table_name="estabelecimento")
 
         db = SessionLocal()
 
@@ -414,7 +564,7 @@ class ETLOrchestrator:
             )
 
             self.logger.info(
-                f"TRUNCATE {self._target_table_for_load("estabelecimento")} "
+                f"TRUNCATE {self._target_table_for_load('estabelecimento')} "
                 f"concluído em "
                 f"{round(time.time()-truncate_start,2)}s"
             )
@@ -423,10 +573,7 @@ class ETLOrchestrator:
 
             db.close()
 
-        files = list(
-            Path(Settings.INPUT_DIR)
-            .glob("*.ESTABELE")
-        )
+        files = self._discover_files("*.ESTABELE")
 
         columns = [
             "cnpj_basico",
@@ -472,7 +619,8 @@ class ETLOrchestrator:
                     "cnpj_ordem",
                     "cnpj_dv"
                 ],
-                "estabelecimento"
+                "estabelecimento",
+                self.run_id
             )
 
             for file in files
@@ -505,6 +653,7 @@ class ETLOrchestrator:
         finally:
 
             db.close()
+            self._finish_phase(phase)
 
     # =====================================================
     # SOCIO
@@ -514,6 +663,8 @@ class ETLOrchestrator:
         self.logger.info(
             "PROCESSANDO SOCIO"
         )
+
+        phase = self._start_phase("LOAD_SOCIO", table_name="socio")
 
         db = SessionLocal()
 
@@ -528,7 +679,7 @@ class ETLOrchestrator:
             )
 
             self.logger.info(
-                f"TRUNCATE {self._target_table_for_load("socio")} "
+                f"TRUNCATE {self._target_table_for_load('socio')} "
                 f"concluído em "
                 f"{round(time.time()-truncate_start,2)}s"
             )
@@ -537,10 +688,7 @@ class ETLOrchestrator:
 
             db.close()
 
-        files = list(
-            Path(Settings.INPUT_DIR)
-            .glob("*.SOCIOCSV")
-        )
+        files = self._discover_files("*.SOCIOCSV")
 
         columns = [
             "cnpj_basico",
@@ -563,7 +711,8 @@ class ETLOrchestrator:
                 SocioStaging,
                 columns,
                 ["cnpj_basico"],
-                "socio"
+                "socio",
+                self.run_id
             )
 
             for file in files
@@ -595,6 +744,7 @@ class ETLOrchestrator:
         finally:
 
             db.close()
+            self._finish_phase(phase)
 
     # =====================================================
     # PIPELINE
@@ -614,7 +764,11 @@ class ETLOrchestrator:
 
         execution_repo = ETLExecutionRepository(db)
 
+        observability_repo = ObservabilityRepository(db)
+
         execution = None
+
+        file_progress = None
 
         total = 0
 
@@ -625,6 +779,47 @@ class ETLOrchestrator:
             self.logger.info(
                 f"PROCESSANDO: {file_path.name}"
             )
+
+            if (
+                Settings.ENABLE_CHECKPOINT_RESUME
+                and observability_repo.already_successful(
+                    "RFB_LOADER_ENTERPRISE",
+                    table_name,
+                    file_path.name,
+                )
+            ):
+                self.logger.info(
+                    f"CHECKPOINT | arquivo já processado com sucesso: {file_path.name}"
+                )
+                if self.run_id:
+                    skipped_progress = observability_repo.start_file_progress(
+                        self.run_id,
+                        "RFB_LOADER_ENTERPRISE",
+                        table_name,
+                        file_path.name,
+                    )
+                    observability_repo.finish_file_progress(
+                        skipped_progress,
+                        self.run_id,
+                        status="SKIPPED",
+                        records_processed=0,
+                    )
+                return
+
+            observability_repo.checkpoint(
+                pipeline="RFB_LOADER_ENTERPRISE",
+                table_name=table_name,
+                file_name=file_path.name,
+                status="STARTED",
+            )
+
+            if self.run_id:
+                file_progress = observability_repo.start_file_progress(
+                    self.run_id,
+                    "RFB_LOADER_ENTERPRISE",
+                    table_name,
+                    file_path.name,
+                )
 
             # =============================================
             # EXECUTION START
@@ -650,6 +845,38 @@ class ETLOrchestrator:
                     time.time() - start_time,
                     2
                 )
+                observability_repo.checkpoint(
+                    pipeline="RFB_LOADER_ENTERPRISE",
+                    table_name=table_name,
+                    file_name=file_path.name,
+                    status="SUCCESS",
+                    records_processed=total,
+                )
+                observability_repo.metric(
+                    pipeline="RFB_LOADER_ENTERPRISE",
+                    metric_name="records_processed",
+                    metric_value=total,
+                    unit="rows",
+                    table_name=table_name,
+                    file_name=file_path.name,
+                    worker=socket.gethostname(),
+                )
+                observability_repo.metric(
+                    pipeline="RFB_LOADER_ENTERPRISE",
+                    metric_name="execution_seconds",
+                    metric_value=total_time,
+                    unit="seconds",
+                    table_name=table_name,
+                    file_name=file_path.name,
+                    worker=socket.gethostname(),
+                )
+                if self.run_id:
+                    observability_repo.finish_file_progress(
+                        file_progress,
+                        self.run_id,
+                        status="SUCCESS",
+                        records_processed=total,
+                    )
                 self.logger.info(
                     f"FINALIZADO | "
                     f"{file_path.name} | "
@@ -733,6 +960,16 @@ class ETLOrchestrator:
                     else 0
                 )
 
+                observability_repo.metric(
+                    pipeline="RFB_LOADER_ENTERPRISE",
+                    metric_name="chunk_records_processed",
+                    metric_value=len(data),
+                    unit="rows",
+                    table_name=table_name,
+                    file_name=file_path.name,
+                    worker=socket.gethostname(),
+                )
+
                 self.logger.info(
                     f"{file_path.name} | "
                     f"+{len(data)} | "
@@ -747,6 +984,20 @@ class ETLOrchestrator:
                 execution,
                 total
             )
+            observability_repo.checkpoint(
+                pipeline="RFB_LOADER_ENTERPRISE",
+                table_name=table_name,
+                file_name=file_path.name,
+                status="SUCCESS",
+                records_processed=total,
+            )
+            if self.run_id:
+                observability_repo.finish_file_progress(
+                    file_progress,
+                    self.run_id,
+                    status="SUCCESS",
+                    records_processed=total,
+                )
 
             total_time = round(
                 time.time() - start_time,
@@ -767,6 +1018,23 @@ class ETLOrchestrator:
                 f"{file_path.name}: {e}",
                 exc_info=True
             )
+
+            observability_repo.checkpoint(
+                pipeline="RFB_LOADER_ENTERPRISE",
+                table_name=table_name,
+                file_name=file_path.name,
+                status="FAILED",
+                records_processed=total,
+                error_message=str(e),
+            )
+            if self.run_id:
+                observability_repo.finish_file_progress(
+                    file_progress,
+                    self.run_id,
+                    status="FAILED",
+                    records_processed=total,
+                    error_message=str(e),
+                )
 
             if execution:
 
