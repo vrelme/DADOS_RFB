@@ -115,7 +115,7 @@ class ETLOrchestrator:
         while True:
 
             self.logger.info(
-                "HEARTBEAT | ETL em execução..."
+                "HEARTBEAT     | ETL em execução..."
             )
 
             if self.run_id:
@@ -139,7 +139,7 @@ class ETLOrchestrator:
             ram = psutil.virtual_memory().percent
 
             self.logger.info(
-                f"MONITOR   | CPU={cpu}% | RAM={ram}%"
+                f"MONITOR         | CPU={cpu}% | RAM={ram}%"
             )
 
             time.sleep(60)
