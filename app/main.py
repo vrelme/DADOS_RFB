@@ -179,9 +179,14 @@ def main():
     except SQLAlchemyError as e:
         logger.error("=" * 70)
         logger.error("EXECUÇÃO INTERROMPIDA POR ERRO DE BANCO")
-        if mysql_error_code(e) == 2003:
+        code = mysql_error_code(e)
+        if code == 2003:
             logger.error("Não foi possível conectar ao MySQL/MariaDB.")
             logger.error("Verifique se o serviço está iniciado e se DB_HOST/DB_PORT estão corretos.")
+        elif code in {2006, 2013}:
+            logger.error("A conexão com o MySQL/MariaDB caiu durante a operação.")
+            logger.error("Verifique se o serviço reiniciou, se há limite de timeout/conexões ou queda no host.")
+            logger.error("A aplicação tentará retry nas operações administrativas configuradas.")
         else:
             logger.error(str(e))
         logger.error(traceback.format_exc())

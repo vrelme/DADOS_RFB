@@ -112,6 +112,16 @@ class Settings:
         os.getenv("DB_LOCAL_INFILE", "True").lower() == "true"
     )
 
+    DB_CONNECT_TIMEOUT = int(os.getenv("DB_CONNECT_TIMEOUT", 30))
+
+    DB_READ_TIMEOUT = int(os.getenv("DB_READ_TIMEOUT", 600))
+
+    DB_WRITE_TIMEOUT = int(os.getenv("DB_WRITE_TIMEOUT", 600))
+
+    DB_CREATE_RETRIES = int(os.getenv("DB_CREATE_RETRIES", 5))
+
+    DB_CREATE_RETRY_DELAY = int(os.getenv("DB_CREATE_RETRY_DELAY", 10))
+
     # =====================================================
     # ETL
     # =====================================================
