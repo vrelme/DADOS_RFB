@@ -53,10 +53,12 @@ class Settings:
         os.getenv("IMPORT_DB_PER_RUN", "True").lower() == "true"
     )
 
-    IMPORT_DB_RUN_ID = os.getenv(
-        "IMPORT_DB_RUN_ID",
-        datetime.now().strftime("%Y%m%d_%H%M%S")
+    IMPORT_DB_RUN_ID = (
+        os.getenv("IMPORT_DB_RUN_ID")
+        or datetime.now().strftime("%Y%m%d_%H%M%S")
     )
+
+    os.environ.setdefault("IMPORT_DB_RUN_ID", IMPORT_DB_RUN_ID)
 
     DEFAULT_ACTIVE_IMPORT_DB_NAME = (
         f"{IMPORT_DB_NAME}_{IMPORT_DB_RUN_ID}"
@@ -64,14 +66,16 @@ class Settings:
         else IMPORT_DB_NAME
     )
 
-    ACTIVE_DB_NAME = os.getenv(
-        "RFB_ACTIVE_DB_NAME",
-        DEFAULT_ACTIVE_IMPORT_DB_NAME
-        if SYNC_STRATEGY in RAW_IMPORT_STRATEGIES
-        else DB_NAME
-    )
+    if SYNC_STRATEGY in RAW_IMPORT_STRATEGIES:
+        ACTIVE_DB_NAME = (
+            DEFAULT_ACTIVE_IMPORT_DB_NAME
+            if IMPORT_DB_PER_RUN
+            else os.getenv("RFB_ACTIVE_DB_NAME", IMPORT_DB_NAME)
+        )
+    else:
+        ACTIVE_DB_NAME = os.getenv("RFB_ACTIVE_DB_NAME", DB_NAME)
 
-    os.environ.setdefault("RFB_ACTIVE_DB_NAME", ACTIVE_DB_NAME)
+    os.environ["RFB_ACTIVE_DB_NAME"] = ACTIVE_DB_NAME
 
     DB_CHARSET = os.getenv("DB_CHARSET", "utf8mb4")
 

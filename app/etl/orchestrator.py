@@ -139,7 +139,7 @@ class ETLOrchestrator:
             ram = psutil.virtual_memory().percent
 
             self.logger.info(
-                f"MONITOR         | CPU={cpu}% | RAM={ram}%"
+                f"MONITOR        | CPU={cpu}% | RAM={ram}%"
             )
 
             time.sleep(60)
@@ -450,7 +450,6 @@ class ETLOrchestrator:
     def _should_truncate_before_load(self):
         return not (
             Settings.SYNC_STRATEGY in Settings.RAW_IMPORT_STRATEGIES
-            and Settings.IMPORT_DB_PER_RUN
             and Settings.LOAD_TARGET == "final"
         )
 
