@@ -55,6 +55,15 @@ def create_engine_for_database(database_name=None):
     )
 
 
+def create_session_factory(bind):
+    return sessionmaker(
+        bind=bind,
+        autoflush=Settings.ORM_AUTOFLUSH,
+        autocommit=Settings.ORM_AUTOCOMMIT,
+        expire_on_commit=Settings.ORM_EXPIRE_ON_COMMIT,
+    )
+
+
 def ensure_database_exists(database_name=None):
     db_name = database_name or Settings.ACTIVE_DB_NAME
     safe_name = db_name.replace("`", "``")
@@ -98,38 +107,16 @@ def ensure_database_exists(database_name=None):
 # =====================================================
 # ENGINE
 # =====================================================
-engine = create_engine(
-    Settings.DATABASE_URL,
+engine = create_engine_for_database(Settings.ACTIVE_DB_NAME)
 
-    echo=Settings.ORM_ECHO,
-
-    future=Settings.ORM_FUTURE,
-
-    pool_size=Settings.DB_POOL_SIZE,
-
-    max_overflow=Settings.DB_MAX_OVERFLOW,
-
-    pool_recycle=Settings.DB_POOL_RECYCLE,
-
-    pool_timeout=Settings.DB_POOL_TIMEOUT,
-
-    pool_pre_ping=Settings.DB_POOL_PRE_PING,
-
-    connect_args=mysql_connect_args()
-)
+operational_engine = create_engine_for_database(Settings.OPERATIONAL_DB_NAME)
 
 # =====================================================
 # SESSION
 # =====================================================
-SessionLocal = sessionmaker(
-    bind=engine,
+SessionLocal = create_session_factory(engine)
 
-    autoflush=Settings.ORM_AUTOFLUSH,
-
-    autocommit=Settings.ORM_AUTOCOMMIT,
-
-    expire_on_commit=Settings.ORM_EXPIRE_ON_COMMIT
-)
+OperationalSessionLocal = create_session_factory(operational_engine)
 
 # =====================================================
 # BASE ORM

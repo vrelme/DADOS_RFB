@@ -21,7 +21,7 @@ from concurrent.futures.process import BrokenProcessPool
 
 from app.config import Settings
 
-from app.database import SessionLocal
+from app.database import OperationalSessionLocal, SessionLocal
 
 from app.models import (
     Empresa,
@@ -119,7 +119,7 @@ class ETLOrchestrator:
             )
 
             if self.run_id:
-                db = SessionLocal()
+                db = OperationalSessionLocal()
                 try:
                     ObservabilityRepository(db).heartbeat_run(self.run_id)
                 finally:
@@ -199,7 +199,7 @@ class ETLOrchestrator:
         return total
 
     def _start_run(self):
-        db = SessionLocal()
+        db = OperationalSessionLocal()
         try:
             repo = ObservabilityRepository(db)
             run = repo.start_run(
@@ -220,7 +220,7 @@ class ETLOrchestrator:
     def _finish_run(self, status, error_message=None):
         if not self.run_id:
             return
-        db = SessionLocal()
+        db = OperationalSessionLocal()
         try:
             ObservabilityRepository(db).finish_run(
                 self.run_id,
@@ -234,7 +234,7 @@ class ETLOrchestrator:
     def _start_phase(self, phase_name, table_name=None, message=None):
         if not self.run_id:
             return None
-        db = SessionLocal()
+        db = OperationalSessionLocal()
         try:
             return ObservabilityRepository(db).start_phase(
                 self.run_id,
@@ -248,7 +248,7 @@ class ETLOrchestrator:
     def _finish_phase(self, phase, status="SUCCESS", message=None):
         if not phase:
             return
-        db = SessionLocal()
+        db = OperationalSessionLocal()
         try:
             ObservabilityRepository(db).finish_phase(
                 phase,
@@ -261,7 +261,7 @@ class ETLOrchestrator:
     def _update_run_context(self, phase=None, table_name=None, file_name=None):
         if not self.run_id:
             return
-        db = SessionLocal()
+        db = OperationalSessionLocal()
         try:
             ObservabilityRepository(db).update_run_context(
                 self.run_id,
@@ -450,7 +450,6 @@ class ETLOrchestrator:
     def _should_truncate_before_load(self):
         return not (
             Settings.SYNC_STRATEGY in Settings.RAW_IMPORT_STRATEGIES
-            and Settings.IMPORT_DB_PER_RUN
             and Settings.LOAD_TARGET == "final"
         )
 
@@ -459,7 +458,7 @@ class ETLOrchestrator:
 
         if not self._should_truncate_before_load():
             self.logger.info(
-                f"RAW_IMPORT banco por execução ativo: TRUNCATE {target_table} ignorado | "
+                f"RAW_IMPORT carga bruta: TRUNCATE {target_table} ignorado | "
                 f"db={Settings.ACTIVE_DB_NAME}"
             )
             return
@@ -760,11 +759,13 @@ class ETLOrchestrator:
 
         db = SessionLocal()
 
+        ops_db = OperationalSessionLocal()
+
         repo = BulkRepository(db)
 
-        execution_repo = ETLExecutionRepository(db)
+        execution_repo = ETLExecutionRepository(ops_db)
 
-        observability_repo = ObservabilityRepository(db)
+        observability_repo = ObservabilityRepository(ops_db)
 
         execution = None
 
@@ -1048,6 +1049,8 @@ class ETLOrchestrator:
             raise
 
         finally:
+
+            ops_db.close()
 
             db.close()
 

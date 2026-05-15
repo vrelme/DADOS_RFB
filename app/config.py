@@ -45,12 +45,14 @@ class Settings:
 
     IMPORT_DB_NAME = os.getenv("IMPORT_DB_NAME", f"{DB_NAME}_import")
 
+    OPERATIONAL_DB_NAME = os.getenv("OPERATIONAL_DB_NAME", f"{DB_NAME}_ops")
+
     SYNC_STRATEGY = os.getenv("SYNC_STRATEGY", "full_refresh").lower()
 
     RAW_IMPORT_STRATEGIES = {"raw_import", "import_only"}
 
     IMPORT_DB_PER_RUN = (
-        os.getenv("IMPORT_DB_PER_RUN", "True").lower() == "true"
+        os.getenv("IMPORT_DB_PER_RUN", "False").lower() == "true"
     )
 
     IMPORT_DB_RUN_ID = (
@@ -67,11 +69,7 @@ class Settings:
     )
 
     if SYNC_STRATEGY in RAW_IMPORT_STRATEGIES:
-        ACTIVE_DB_NAME = (
-            DEFAULT_ACTIVE_IMPORT_DB_NAME
-            if IMPORT_DB_PER_RUN
-            else os.getenv("RFB_ACTIVE_DB_NAME", IMPORT_DB_NAME)
-        )
+        ACTIVE_DB_NAME = DEFAULT_ACTIVE_IMPORT_DB_NAME
     else:
         ACTIVE_DB_NAME = os.getenv("RFB_ACTIVE_DB_NAME", DB_NAME)
 
@@ -144,6 +142,14 @@ class Settings:
     DB_CREATE_RETRIES = int(os.getenv("DB_CREATE_RETRIES", 5))
 
     DB_CREATE_RETRY_DELAY = int(os.getenv("DB_CREATE_RETRY_DELAY", 10))
+
+    RAW_IMPORT_RESET_TABLES = (
+        os.getenv("RAW_IMPORT_RESET_TABLES", "True").lower() == "true"
+    )
+
+    RAW_IMPORT_FAST_SCHEMA = (
+        os.getenv("RAW_IMPORT_FAST_SCHEMA", "True").lower() == "true"
+    )
 
     # =====================================================
     # ETL
