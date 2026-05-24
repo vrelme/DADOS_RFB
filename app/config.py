@@ -151,6 +151,21 @@ class Settings:
         os.getenv("RAW_IMPORT_FAST_SCHEMA", "True").lower() == "true"
     )
 
+    PROMOTE_RAW_IMPORT_AFTER_LOAD = (
+        os.getenv("PROMOTE_RAW_IMPORT_AFTER_LOAD", "True").lower() == "true"
+    )
+
+    CONTROL_DIFF_MAX_ROWS = int(os.getenv("CONTROL_DIFF_MAX_ROWS", 1000))
+
+    CONTROL_DIFF_DETAIL_TABLES = {
+        value.strip()
+        for value in os.getenv(
+            "CONTROL_DIFF_DETAIL_TABLES",
+            "cnae,moti,munic,natju,pais,quals"
+        ).split(",")
+        if value.strip()
+    }
+
     # =====================================================
     # ETL
     # =====================================================

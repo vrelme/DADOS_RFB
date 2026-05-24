@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.config import Settings
 from app.exceptions import DatabaseOperationError
+from app.etl.rfb_manifest import RFB_TABLES_BY_NAME
 
 logger = logging.getLogger(__name__)
 
@@ -36,17 +37,33 @@ class BulkRepository:
             "socio": self.load_socio_file_to_staging,
         }
 
-        if table_name not in loaders:
-            raise ValueError(
-                f"LOAD DATA não configurado para {table_name}"
-            )
+        if table_name in loaders:
+            return loaders[table_name](file_path)
 
-        return loaders[table_name](file_path)
+        if table_name in RFB_TABLES_BY_NAME:
+            return self.load_generic_rfb_file_to_staging(table_name, file_path)
+
+        raise ValueError(
+            f"LOAD DATA não configurado para {table_name}"
+        )
 
     def _target_table_name(self, table_name: str):
         if Settings.LOAD_TARGET == "final":
             return table_name
         return f"{table_name}_staging"
+
+    def load_generic_rfb_file_to_staging(self, table_name: str, file_path: Path):
+
+        definition = RFB_TABLES_BY_NAME[table_name]
+        columns = list(definition.columns)
+        set_clause = self._set_clause_for_text_columns(columns)
+
+        return self._load_data_local_infile(
+            table_name=self._target_table_name(table_name),
+            file_path=file_path,
+            columns=columns,
+            set_clause=set_clause
+        )
 
     def load_empresa_file_to_staging(self, file_path: Path):
 
@@ -197,6 +214,9 @@ class BulkRepository:
         """
 
         try:
+            logger.info(
+                f"{table_name} | INICIO LEITURA | {file_path.name}"
+            )
             self._prepare_bulk_session()
             result = self.db.execute(text(sql))
             self.db.commit()
@@ -206,7 +226,7 @@ class BulkRepository:
             rps = int(rows / elapsed) if elapsed > 0 else 0
 
             logger.info(
-                f"{table_name} | LOAD DATA | "
+                f"{table_name} | FIM LEITURA | "
                 f"{file_path.name} | {rows} registros | "
                 f"{elapsed}s | {rps} reg/s"
             )

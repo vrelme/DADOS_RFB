@@ -28,6 +28,7 @@ from app.models import (
     DataQualityRule,
 )
 from app.etl.orchestrator import ETLOrchestrator
+from app.etl.rfb_manifest import RFB_TABLES, raw_import_create_table_sql
 
 
 def banner(logger):
@@ -112,79 +113,15 @@ def create_table_set(logger, bind, tables, reset=False):
     logger.info(f"Tabelas criadas/verificadas: {table_names}")
 
 
-RAW_IMPORT_FAST_TABLE_SQL = {
-    "empresa": """
-        CREATE TABLE IF NOT EXISTS empresa (
-            cnpj_basico VARCHAR(8) NULL,
-            razao_social VARCHAR(255) NULL,
-            natureza_juridica INT NULL,
-            qualificacao_responsavel INT NULL,
-            capital_social DECIMAL(18, 2) NULL,
-            porte_empresa INT NULL,
-            ente_federativo VARCHAR(255) NULL
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    """,
-    "estabelecimento": """
-        CREATE TABLE IF NOT EXISTS estabelecimento (
-            cnpj_basico VARCHAR(8) NULL,
-            cnpj_ordem VARCHAR(4) NULL,
-            cnpj_dv VARCHAR(2) NULL,
-            identificador_matriz_filial VARCHAR(1) NULL,
-            nome_fantasia VARCHAR(255) NULL,
-            situacao_cadastral VARCHAR(2) NULL,
-            data_situacao_cadastral VARCHAR(8) NULL,
-            motivo_situacao_cadastral VARCHAR(2) NULL,
-            nome_cidade_exterior VARCHAR(255) NULL,
-            pais VARCHAR(3) NULL,
-            data_inicio_atividade VARCHAR(8) NULL,
-            cnae_fiscal_principal VARCHAR(7) NULL,
-            cnae_fiscal_secundaria TEXT NULL,
-            tipo_logradouro VARCHAR(50) NULL,
-            logradouro VARCHAR(255) NULL,
-            numero VARCHAR(20) NULL,
-            complemento VARCHAR(255) NULL,
-            bairro VARCHAR(100) NULL,
-            cep VARCHAR(8) NULL,
-            uf VARCHAR(2) NULL,
-            municipio VARCHAR(4) NULL,
-            ddd1 VARCHAR(4) NULL,
-            telefone1 VARCHAR(20) NULL,
-            ddd2 VARCHAR(4) NULL,
-            telefone2 VARCHAR(20) NULL,
-            ddd_fax VARCHAR(4) NULL,
-            fax VARCHAR(20) NULL,
-            email VARCHAR(255) NULL,
-            situacao_especial VARCHAR(255) NULL,
-            data_situacao_especial VARCHAR(8) NULL
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    """,
-    "socio": """
-        CREATE TABLE IF NOT EXISTS socio (
-            cnpj_basico VARCHAR(8) NULL,
-            identificador_socio VARCHAR(1) NULL,
-            nome_socio VARCHAR(255) NULL,
-            cpf_cnpj_socio VARCHAR(14) NULL,
-            qualificacao_socio VARCHAR(2) NULL,
-            data_entrada_sociedade VARCHAR(8) NULL,
-            pais VARCHAR(3) NULL,
-            representante_legal VARCHAR(11) NULL,
-            nome_representante VARCHAR(255) NULL,
-            qualificacao_representante_legal VARCHAR(2) NULL,
-            faixa_etaria VARCHAR(1) NULL
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    """,
-}
-
-
 def create_fast_raw_import_tables(logger):
     with engine.begin() as conn:
         if Settings.RAW_IMPORT_RESET_TABLES:
-            for table_name in ["socio", "estabelecimento", "empresa"]:
-                conn.execute(text(f"DROP TABLE IF EXISTS {table_name}"))
+            for table in reversed(RFB_TABLES):
+                conn.execute(text(f"DROP TABLE IF EXISTS {table.table_name}"))
 
-        for table_name, ddl in RAW_IMPORT_FAST_TABLE_SQL.items():
-            conn.execute(text(ddl))
-            logger.info(f"Tabela raw import pronta: {table_name}")
+        for table in RFB_TABLES:
+            conn.execute(text(raw_import_create_table_sql(table)))
+            logger.info(f"Tabela raw import pronta: {table.table_name}")
 
 
 def create_database(logger):

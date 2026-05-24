@@ -43,6 +43,8 @@ from app.etl.etl_execution_repository import (
     ETLExecutionRepository
 )
 from app.etl.observability_repository import ObservabilityRepository
+from app.etl.raw_import_promotion import RawImportPromotionRepository
+from app.etl.rfb_manifest import RFB_TABLES
 
 logger = logging.getLogger(__name__)
 
@@ -175,11 +177,14 @@ class ETLOrchestrator:
         ).start()
 
         try:
-            self._process_empresa()
+            if Settings.SYNC_STRATEGY in Settings.RAW_IMPORT_STRATEGIES:
+                self._run_raw_import_pipeline()
+            else:
+                self._process_empresa()
 
-            self._process_estabelecimento()
+                self._process_estabelecimento()
 
-            self._process_socio()
+                self._process_socio()
 
             self._finish_run("SUCCESS")
 
@@ -192,6 +197,17 @@ class ETLOrchestrator:
             raise
 
     def _all_input_files_count(self):
+        if Settings.SYNC_STRATEGY in Settings.RAW_IMPORT_STRATEGIES:
+            total = 0
+            seen = set()
+            for table in RFB_TABLES:
+                for pattern in table.patterns:
+                    for file_path in self._discover_files(pattern):
+                        if file_path not in seen:
+                            seen.add(file_path)
+                            total += 1
+            return total
+
         patterns = ["*.EMPRECSV", "*.ESTABELE", "*.SOCIOCSV"]
         total = 0
         for pattern in patterns:
@@ -271,6 +287,70 @@ class ETLOrchestrator:
             )
         finally:
             db.close()
+
+    def _run_raw_import_pipeline(self):
+        if Settings.LOAD_STRATEGY != "load_data":
+            raise RuntimeError(
+                "SYNC_STRATEGY=raw_import exige LOAD_STRATEGY=load_data para carga rápida."
+            )
+
+        for table in RFB_TABLES:
+            self._process_rfb_table(table)
+
+        if Settings.PROMOTE_RAW_IMPORT_AFTER_LOAD:
+            phase = self._start_phase("PROMOTE_RAW_IMPORT", table_name="controle_alteracao")
+            try:
+                self.logger.info("-" * 80)
+                self.logger.info(
+                    f"PROMOVENDO {Settings.ACTIVE_DB_NAME} -> {Settings.DB_NAME}"
+                )
+                self.logger.info("-" * 80)
+                RawImportPromotionRepository().promote()
+            finally:
+                self._finish_phase(phase)
+
+    def _process_rfb_table(self, table):
+        self.logger.info("-" * 80)
+        self.logger.info(f"PROCESSANDO {table.table_name.upper()}")
+        self.logger.info("-" * 80)
+
+        phase = self._start_phase(
+            f"LOAD_{table.table_name.upper()}",
+            table_name=table.table_name,
+        )
+
+        files = self._discover_table_files(table)
+        if not files:
+            self.logger.warning(f"Nenhum arquivo encontrado para {table.table_name}")
+            self._finish_phase(phase, status="SKIPPED")
+            return
+
+        self.logger.info(
+            f"{table.table_name} | ordem de carga | "
+            f"{', '.join(file_path.name for file_path in files)}"
+        )
+
+        try:
+            for file_path in files:
+                self._execute_pipeline(
+                    file_path=file_path,
+                    staging_model=None,
+                    columns=None,
+                    key=None,
+                    table_name=table.table_name,
+                )
+        finally:
+            self._finish_phase(phase)
+
+    def _discover_table_files(self, table):
+        files = []
+        seen = set()
+        for pattern in table.patterns:
+            for file_path in self._discover_files(pattern):
+                if file_path not in seen:
+                    seen.add(file_path)
+                    files.append(file_path)
+        return sorted(files, key=lambda item: item.name.upper())
 
     # =====================================================
     # PARALELISMO
