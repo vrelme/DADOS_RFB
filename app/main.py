@@ -113,9 +113,47 @@ def create_table_set(logger, bind, tables, reset=False):
     logger.info(f"Tabelas criadas/verificadas: {table_names}")
 
 
+def validate_raw_import_reset_target():
+    protected_databases = {
+        Settings.DB_NAME.lower(),
+        Settings.OPERATIONAL_DB_NAME.lower(),
+    }
+    active_database = Settings.ACTIVE_DB_NAME.lower()
+
+    if active_database in protected_databases:
+        raise RuntimeError(
+            "RAW_IMPORT_RESET_SCHEMA bloquearia um banco protegido. "
+            f"ACTIVE_DB_NAME={Settings.ACTIVE_DB_NAME}; "
+            f"DB_NAME={Settings.DB_NAME}; "
+            f"OPERATIONAL_DB_NAME={Settings.OPERATIONAL_DB_NAME}"
+        )
+
+
+def reset_raw_import_schema(logger):
+    if not (
+        Settings.SYNC_STRATEGY in Settings.RAW_IMPORT_STRATEGIES
+        and Settings.RAW_IMPORT_RESET_SCHEMA
+    ):
+        return
+
+    validate_raw_import_reset_target()
+    logger.info(
+        f"RAW_IMPORT_RESET_SCHEMA=True | DROP DATABASE {Settings.ACTIVE_DB_NAME}"
+    )
+    ensure_database_exists(Settings.ACTIVE_DB_NAME)
+    safe_name = Settings.ACTIVE_DB_NAME.replace("`", "``")
+    with engine.begin() as conn:
+        conn.execute(text(f"DROP DATABASE IF EXISTS `{safe_name}`"))
+
+    logger.info(
+        f"RAW_IMPORT_RESET_SCHEMA=True | CREATE DATABASE {Settings.ACTIVE_DB_NAME}"
+    )
+    ensure_database_exists(Settings.ACTIVE_DB_NAME)
+
+
 def create_fast_raw_import_tables(logger):
     with engine.begin() as conn:
-        if Settings.RAW_IMPORT_RESET_TABLES:
+        if Settings.RAW_IMPORT_RESET_TABLES and not Settings.RAW_IMPORT_RESET_SCHEMA:
             for table in reversed(RFB_TABLES):
                 conn.execute(text(f"DROP TABLE IF EXISTS {table.table_name}"))
 
@@ -136,6 +174,7 @@ def create_database(logger):
 
     ensure_database_exists(Settings.ACTIVE_DB_NAME)
     ensure_database_exists(Settings.OPERATIONAL_DB_NAME)
+    reset_raw_import_schema(logger)
 
     logger.info("Criando estrutura banco de carga...")
     if Settings.SYNC_STRATEGY in Settings.RAW_IMPORT_STRATEGIES:

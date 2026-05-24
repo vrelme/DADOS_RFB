@@ -155,6 +155,10 @@ class Settings:
         os.getenv("RAW_IMPORT_RESET_TABLES", "True").lower() == "true"
     )
 
+    RAW_IMPORT_RESET_SCHEMA = (
+        os.getenv("RAW_IMPORT_RESET_SCHEMA", "True").lower() == "true"
+    )
+
     RAW_IMPORT_FAST_SCHEMA = (
         os.getenv("RAW_IMPORT_FAST_SCHEMA", "True").lower() == "true"
     )
