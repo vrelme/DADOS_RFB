@@ -139,6 +139,14 @@ class Settings:
 
     DB_WRITE_TIMEOUT = int(os.getenv("DB_WRITE_TIMEOUT", 600))
 
+    DB_PROMOTION_READ_TIMEOUT = int(
+        os.getenv("DB_PROMOTION_READ_TIMEOUT", 14400)
+    )
+
+    DB_PROMOTION_WRITE_TIMEOUT = int(
+        os.getenv("DB_PROMOTION_WRITE_TIMEOUT", 14400)
+    )
+
     DB_CREATE_RETRIES = int(os.getenv("DB_CREATE_RETRIES", 5))
 
     DB_CREATE_RETRY_DELAY = int(os.getenv("DB_CREATE_RETRY_DELAY", 10))

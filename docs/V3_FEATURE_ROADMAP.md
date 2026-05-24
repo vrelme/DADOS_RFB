@@ -111,6 +111,39 @@ Campos planejados:
 
 `ENABLE_ZIP_PROCESSING=True` faz o ETL extrair `.zip` de `INPUT_DIR` para `EXTRACT_DIR` e descobrir arquivos extraidos automaticamente.
 
+
+## Atualizacao Implementada - Carga RFB Completa
+
+A v3 passou a carregar todos os grupos de arquivos descompactados da Receita Federal em `rfb_import`:
+
+- `empresa`;
+- `estabelecimento`;
+- `socio`;
+- `simples`;
+- `cnae`;
+- `moti`;
+- `munic`;
+- `natju`;
+- `pais`;
+- `quals`.
+
+A carga usa `RFB_TABLES` como manifesto unico de padroes, colunas e chaves. O fluxo principal e:
+
+```text
+Arquivos RFB -> rfb_import -> dados_rfb -> controle_alteracao
+                 |
+                 v
+             dados_rfb_ops
+```
+
+Decisoes implementadas:
+
+- `rfb_import` fica somente com dados brutos;
+- `dados_rfb_ops` guarda metadados operacionais;
+- `dados_rfb` recebe a copia/promocao final;
+- `controle_alteracao` registra se houve ou nao divergencia por tabela;
+- detalhes campo-a-campo sao limitados por `CONTROL_DIFF_DETAIL_TABLES` e `CONTROL_DIFF_MAX_ROWS`.
+
 ## Proximas Implementacoes
 
 ### Retry Inteligente

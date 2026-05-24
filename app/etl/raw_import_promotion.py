@@ -4,11 +4,11 @@ import logging
 
 from datetime import datetime
 
-from sqlalchemy import text
+from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import Settings
-from app.database import build_server_url, create_engine_for_database, mysql_connect_args
+from app.database import build_database_url, build_server_url, create_engine_for_database, mysql_connect_args
 from app.etl.rfb_manifest import RFB_TABLES
 
 
@@ -24,8 +24,25 @@ class RawImportPromotionRepository:
     def __init__(self):
         self.import_db = Settings.ACTIVE_DB_NAME
         self.final_db = Settings.DB_NAME
-        self.import_engine = create_engine_for_database(self.import_db)
-        self.final_engine = create_engine_for_database(self.final_db)
+        self.import_engine = self._create_promotion_engine(self.import_db)
+        self.final_engine = self._create_promotion_engine(self.final_db)
+
+    def _create_promotion_engine(self, database_name):
+        connect_args = mysql_connect_args()
+        connect_args["read_timeout"] = Settings.DB_PROMOTION_READ_TIMEOUT
+        connect_args["write_timeout"] = Settings.DB_PROMOTION_WRITE_TIMEOUT
+
+        return create_engine(
+            build_database_url(database_name),
+            echo=Settings.ORM_ECHO,
+            future=Settings.ORM_FUTURE,
+            pool_size=Settings.DB_POOL_SIZE,
+            max_overflow=Settings.DB_MAX_OVERFLOW,
+            pool_recycle=Settings.DB_POOL_RECYCLE,
+            pool_timeout=Settings.DB_POOL_TIMEOUT,
+            pool_pre_ping=Settings.DB_POOL_PRE_PING,
+            connect_args=connect_args,
+        )
 
     def promote(self):
         existed = self._database_exists(self.final_db)
@@ -49,13 +66,15 @@ class RawImportPromotionRepository:
         server_engine = create_engine_for_database(None)
         # create_engine_for_database(None) points to active DB; use server URL instead.
         server_engine.dispose()
-        from sqlalchemy import create_engine
+        connect_args = mysql_connect_args()
+        connect_args["read_timeout"] = Settings.DB_PROMOTION_READ_TIMEOUT
+        connect_args["write_timeout"] = Settings.DB_PROMOTION_WRITE_TIMEOUT
 
         engine = create_engine(
             build_server_url(),
             future=True,
             pool_pre_ping=Settings.DB_POOL_PRE_PING,
-            connect_args=mysql_connect_args(),
+            connect_args=connect_args,
         )
         try:
             with engine.connect() as conn:
@@ -170,8 +189,20 @@ class RawImportPromotionRepository:
         import_table = f"{quote_identifier(self.import_db)}.{quote_identifier(table_name)}"
         conn.execute(text(f"DROP TABLE IF EXISTS {final_table}"))
         conn.execute(text(f"CREATE TABLE {final_table} LIKE {import_table}"))
+        self._prepare_promotion_session(conn)
+        logger.info(
+            f"PROMOÇÃO | copiando {self.import_db}.{table_name} -> "
+            f"{self.final_db}.{table_name} | "
+            f"timeout={Settings.DB_PROMOTION_READ_TIMEOUT}s"
+        )
         conn.execute(text(f"INSERT INTO {final_table} SELECT * FROM {import_table}"))
         logger.info(f"PROMOÇÃO | {self.import_db}.{table_name} -> {self.final_db}.{table_name}")
+
+    def _prepare_promotion_session(self, conn):
+        timeout = max(Settings.DB_PROMOTION_READ_TIMEOUT, 3600)
+        conn.execute(text(f"SET SESSION wait_timeout = {int(timeout)}"))
+        conn.execute(text(f"SET SESSION net_read_timeout = {int(timeout)}"))
+        conn.execute(text(f"SET SESSION net_write_timeout = {int(timeout)}"))
 
     def _table_signature(self, database_name, table_name, columns):
         table_ref = f"{quote_identifier(database_name)}.{quote_identifier(table_name)}"

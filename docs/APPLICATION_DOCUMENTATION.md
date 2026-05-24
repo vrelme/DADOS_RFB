@@ -1,3 +1,103 @@
+# Documentacao Tecnica - RFB Loader Enterprise
+
+## Estado Atual da v3
+
+A v3 implementa um fluxo em tres bancos:
+
+```text
+rfb_import    -> carga bruta dos arquivos CSV da RFB
+dados_rfb     -> base final promovida/consultavel
+dados_rfb_ops -> metadados operacionais do ETL
+```
+
+### Carga Bruta
+
+O modo recomendado para carga completa e:
+
+```env
+SYNC_STRATEGY=raw_import
+LOAD_TARGET=final
+LOAD_STRATEGY=load_data
+RAW_IMPORT_FAST_SCHEMA=True
+RAW_IMPORT_RESET_TABLES=True
+```
+
+Com `RAW_IMPORT_FAST_SCHEMA=True`, as tabelas do banco `rfb_import` sao criadas sem indices e sem primary keys para maximizar throughput de `LOAD DATA LOCAL INFILE`.
+
+### Manifesto de Arquivos RFB
+
+O arquivo `app/etl/rfb_manifest.py` centraliza o mapeamento entre arquivos, tabelas, colunas e chaves de comparacao.
+
+| Tabela | Padroes de arquivo | Chave de comparacao |
+| --- | --- | --- |
+| `empresa` | `*.EMPRECSV` | `cnpj_basico` |
+| `estabelecimento` | `*.ESTABELE` | `cnpj_basico`, `cnpj_ordem`, `cnpj_dv` |
+| `socio` | `*.SOCIOCSV` | `cnpj_basico`, `identificador_socio`, `nome_socio`, `cpf_cnpj_socio`, `data_entrada_sociedade` |
+| `simples` | `*.SIMPLES.CSV.*` | `cnpj_basico` |
+| `cnae` | `*.CNAECSV` | `codigo` |
+| `moti` | `*.MOTICSV` | `codigo` |
+| `munic` | `*.MUNICCSV` | `codigo` |
+| `natju` | `*.NATJUCSV` | `codigo` |
+| `pais` | `*.PAISCSV` | `codigo` |
+| `quals` | `*.QUALSCSV` | `codigo` |
+
+### Promocao Para Banco Final
+
+Ao final da carga bruta, se `PROMOTE_RAW_IMPORT_AFTER_LOAD=True`, o `RawImportPromotionRepository` promove `rfb_import` para `dados_rfb`.
+
+Regras:
+
+- se `dados_rfb` nao existir, cria e copia todas as tabelas;
+- se `dados_rfb` existir, compara contagem e checksum por tabela;
+- registra o resultado em `dados_rfb.controle_alteracao`;
+- substitui a tabela final quando houver divergencia.
+
+A tabela `controle_alteracao` contem:
+
+```text
+id
+tabela
+status
+alteracao
+data_movimento
+hora_movimento
+created_at
+```
+
+Status esperados:
+
+```text
+sem alteracao
+tem alteracao
+copiada
+```
+
+Por performance, `CONTROL_DIFF_DETAIL_TABLES` limita quais tabelas recebem detalhe campo-a-campo. O padrao e:
+
+```env
+CONTROL_DIFF_DETAIL_TABLES=cnae,moti,munic,natju,pais,quals
+CONTROL_DIFF_MAX_ROWS=1000
+```
+
+### Banco Operacional
+
+O banco `dados_rfb_ops` guarda status, progresso, checkpoint e metricas:
+
+```text
+etl_execution
+etl_run
+etl_run_phase
+etl_file_progress
+etl_metric
+etl_checkpoint
+etl_dead_letter
+data_quality_rule
+```
+
+Essas tabelas nao devem ficar no `rfb_import`, porque ele deve permanecer dedicado a carga bruta dos arquivos da Receita.
+
+---
+
 # Documentação Técnica - RFB Loader Enterprise
 
 ## 1. Visão Geral
