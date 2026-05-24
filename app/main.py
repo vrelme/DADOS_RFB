@@ -145,14 +145,21 @@ def reset_raw_import_schema(logger):
     with engine.begin() as conn:
         conn.execute(text(f"DROP DATABASE IF EXISTS `{safe_name}`"))
 
+    engine.dispose()
+
     logger.info(
         f"RAW_IMPORT_RESET_SCHEMA=True | CREATE DATABASE {Settings.ACTIVE_DB_NAME}"
     )
     ensure_database_exists(Settings.ACTIVE_DB_NAME)
+    engine.dispose()
 
 
 def create_fast_raw_import_tables(logger):
+    safe_name = Settings.ACTIVE_DB_NAME.replace("`", "``")
+
     with engine.begin() as conn:
+        conn.execute(text(f"USE `{safe_name}`"))
+
         if Settings.RAW_IMPORT_RESET_TABLES and not Settings.RAW_IMPORT_RESET_SCHEMA:
             for table in reversed(RFB_TABLES):
                 conn.execute(text(f"DROP TABLE IF EXISTS {table.table_name}"))
