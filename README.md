@@ -100,8 +100,17 @@ quals
 controle_alteracao
 ```
 
-Se `dados_rfb` nao existir, o ETL cria o banco e copia as tabelas de `rfb_import`.
-Se existir, compara tabela por tabela e registra em `controle_alteracao`:
+Por padrao, a promocao usa `DB_PROMOTION_STRATEGY=rename_swap`: as tabelas carregadas em
+`rfb_import` sao movidas para `dados_rfb` com `RENAME TABLE`, evitando copia linha-a-linha.
+Depois disso, as tabelas brutas sao recriadas vazias em `rfb_import` para a proxima carga.
+
+Antes do `rename_swap`, o ETL executa auditoria seletiva dos campos configurados em
+`dados_rfb.controle_campo_monitorado`. Por padrao, `estabelecimento.situacao_cadastral`
+e monitorado para registrar historico de mudanca ativa/inativa em
+`dados_rfb.historico_campo_monitorado`.
+
+A estrategia antiga de copia em lotes continua disponivel com `DB_PROMOTION_STRATEGY=copy`.
+Nesse modo, se `dados_rfb` existir, compara tabela por tabela e registra em `controle_alteracao`:
 
 - `sem alteracao`: assinatura da tabela nao mudou;
 - `tem alteracao`: houve divergencia de contagem/checksum;
@@ -124,6 +133,8 @@ IMPORT_DB_PER_RUN=False
 RAW_IMPORT_RESET_TABLES=True
 RAW_IMPORT_FAST_SCHEMA=True
 PROMOTE_RAW_IMPORT_AFTER_LOAD=True
+DB_PROMOTION_STRATEGY=rename_swap
+MONITORED_FIELDS_BOOTSTRAP_DEFAULTS=True
 CONTROL_DIFF_MAX_ROWS=1000
 CONTROL_DIFF_DETAIL_TABLES=cnae,moti,munic,natju,pais,quals
 DB_LOCAL_INFILE=True
@@ -142,5 +153,6 @@ python -m app.main
 ## Documentacao
 
 - [Documentacao da aplicacao](docs/APPLICATION_DOCUMENTATION.md)
+- [Requisitos](docs/REQUIREMENTS.md)
 - [Roadmap v3](docs/V3_FEATURE_ROADMAP.md)
 - [Diagramas Mermaid](docs/diagrams)

@@ -147,6 +147,14 @@ class Settings:
         os.getenv("DB_PROMOTION_WRITE_TIMEOUT", 14400)
     )
 
+    DB_PROMOTION_BATCH_SIZE = int(
+        os.getenv("DB_PROMOTION_BATCH_SIZE", 50000)
+    )
+
+    DB_PROMOTION_STRATEGY = os.getenv(
+        "DB_PROMOTION_STRATEGY", "rename_swap"
+    ).lower()
+
     DB_CREATE_RETRIES = int(os.getenv("DB_CREATE_RETRIES", 5))
 
     DB_CREATE_RETRY_DELAY = int(os.getenv("DB_CREATE_RETRY_DELAY", 10))
@@ -177,6 +185,10 @@ class Settings:
         ).split(",")
         if value.strip()
     }
+
+    MONITORED_FIELDS_BOOTSTRAP_DEFAULTS = (
+        os.getenv("MONITORED_FIELDS_BOOTSTRAP_DEFAULTS", "True").lower() == "true"
+    )
 
     # =====================================================
     # ETL

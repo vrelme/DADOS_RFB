@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 
 from pathlib import Path
+from sqlalchemy import text
 
 from concurrent.futures import (
     ProcessPoolExecutor,
@@ -47,6 +48,16 @@ from app.etl.raw_import_promotion import RawImportPromotionRepository
 from app.etl.rfb_manifest import RFB_TABLES
 
 logger = logging.getLogger(__name__)
+
+
+def format_duration(seconds):
+    seconds = float(seconds or 0)
+    hours, remainder = divmod(int(seconds), 3600)
+    minutes, whole_seconds = divmod(remainder, 60)
+    milliseconds = int((seconds - int(seconds)) * 1000)
+    if hours:
+        return f"{hours:02d}:{minutes:02d}:{whole_seconds:02d}.{milliseconds:03d}"
+    return f"{minutes:02d}:{whole_seconds:02d}.{milliseconds:03d}"
 
 
 # =====================================================
@@ -109,6 +120,11 @@ class ETLOrchestrator:
 
         self.chunk_size = Settings.CHUNK_SIZE
 
+        self._raw_import_expected_tables = set()
+        self._table_load_timings = {}
+        self._promotion_timings = None
+        self._pipeline_started_at = None
+
     # =====================================================
     # HEARTBEAT
     # =====================================================
@@ -150,6 +166,7 @@ class ETLOrchestrator:
     # MAIN
     # =====================================================
     def run(self):
+        self._pipeline_started_at = time.time()
 
         self.logger.info("=" * 80)
         self.logger.info("RFB LOADER ENTERPRISE")
@@ -187,6 +204,7 @@ class ETLOrchestrator:
                 self._process_socio()
 
             self._finish_run("SUCCESS")
+            self._log_timing_summary()
 
             self.logger.info("=" * 80)
             self.logger.info("PIPELINE FINALIZADO")
@@ -289,6 +307,7 @@ class ETLOrchestrator:
             db.close()
 
     def _run_raw_import_pipeline(self):
+        raw_import_started_at = time.time()
         if Settings.LOAD_STRATEGY != "load_data":
             raise RuntimeError(
                 "SYNC_STRATEGY=raw_import exige LOAD_STRATEGY=load_data para carga rápida."
@@ -296,6 +315,8 @@ class ETLOrchestrator:
 
         for table in RFB_TABLES:
             self._process_rfb_table(table)
+
+        self._validate_raw_import_loaded()
 
         if Settings.PROMOTE_RAW_IMPORT_AFTER_LOAD:
             phase = self._start_phase("PROMOTE_RAW_IMPORT", table_name="controle_alteracao")
@@ -305,11 +326,16 @@ class ETLOrchestrator:
                     f"PROMOVENDO {Settings.ACTIVE_DB_NAME} -> {Settings.DB_NAME}"
                 )
                 self.logger.info("-" * 80)
-                RawImportPromotionRepository().promote()
+                self._promotion_timings = RawImportPromotionRepository().promote()
             finally:
                 self._finish_phase(phase)
+        self.logger.info(
+            "RAW_IMPORT | tempo total carga + promocao | "
+            f"{format_duration(time.time() - raw_import_started_at)}"
+        )
 
     def _process_rfb_table(self, table):
+        table_started_at = time.time()
         self.logger.info("-" * 80)
         self.logger.info(f"PROCESSANDO {table.table_name.upper()}")
         self.logger.info("-" * 80)
@@ -324,6 +350,7 @@ class ETLOrchestrator:
             self.logger.warning(f"Nenhum arquivo encontrado para {table.table_name}")
             self._finish_phase(phase, status="SKIPPED")
             return
+        self._raw_import_expected_tables.add(table.table_name)
 
         self.logger.info(
             f"{table.table_name} | ordem de carga | "
@@ -340,7 +367,51 @@ class ETLOrchestrator:
                     table_name=table.table_name,
                 )
         finally:
+            elapsed = time.time() - table_started_at
+            self._table_load_timings[table.table_name] = elapsed
+            self.logger.info(
+                f"TEMPO TABELA | carga {table.table_name} | {format_duration(elapsed)}"
+            )
             self._finish_phase(phase)
+
+    def _log_timing_summary(self):
+        total_elapsed = (
+            time.time() - self._pipeline_started_at
+            if self._pipeline_started_at
+            else 0
+        )
+        load_total = sum(self._table_load_timings.values())
+        promotion_total = (
+            self._promotion_timings.get("total_seconds", 0)
+            if self._promotion_timings
+            else 0
+        )
+
+        self.logger.info("=" * 80)
+        self.logger.info("RESUMO DE TEMPOS")
+        self.logger.info("=" * 80)
+        for table_name, elapsed in self._table_load_timings.items():
+            self.logger.info(
+                f"TEMPO | carga tabela {table_name}: {format_duration(elapsed)}"
+            )
+        if self._table_load_timings:
+            self.logger.info(
+                f"TEMPO | carga total: {format_duration(load_total)}"
+            )
+
+        if self._promotion_timings:
+            for table_name, elapsed in self._promotion_timings.get("tables", {}).items():
+                self.logger.info(
+                    f"TEMPO | promocao tabela {table_name}: {format_duration(elapsed)}"
+                )
+            self.logger.info(
+                f"TEMPO | promocao total: {format_duration(promotion_total)}"
+            )
+
+        self.logger.info(
+            f"TEMPO | total pipeline: {format_duration(total_elapsed)}"
+        )
+        self.logger.info("=" * 80)
 
     def _discover_table_files(self, table):
         files = []
@@ -532,6 +603,38 @@ class ETLOrchestrator:
             Settings.SYNC_STRATEGY in Settings.RAW_IMPORT_STRATEGIES
             and Settings.LOAD_TARGET == "final"
         )
+
+    def _can_resume_from_checkpoint(self):
+        return not (
+            Settings.SYNC_STRATEGY in Settings.RAW_IMPORT_STRATEGIES
+            and Settings.RAW_IMPORT_RESET_SCHEMA
+        )
+
+    def _validate_raw_import_loaded(self):
+        if not self._raw_import_expected_tables:
+            return
+
+        empty_tables = []
+        db = SessionLocal()
+        try:
+            for table_name in sorted(self._raw_import_expected_tables):
+                total = db.execute(
+                    text(f"SELECT COUNT(*) FROM `{table_name}`")
+                ).scalar()
+                self.logger.info(
+                    f"VALIDACAO RAW_IMPORT | {table_name}: {int(total or 0)} registros"
+                )
+                if not total:
+                    empty_tables.append(table_name)
+        finally:
+            db.close()
+
+        if empty_tables:
+            raise RuntimeError(
+                "Carga RAW_IMPORT vazia para tabela(s) com arquivo encontrado: "
+                + ", ".join(empty_tables)
+                + ". Verifique checkpoints e LOAD DATA antes da promocao."
+            )
 
     def _truncate_target_if_needed(self, repo, table_name):
         target_table = self._target_table_for_load(table_name)
@@ -865,6 +968,7 @@ class ETLOrchestrator:
 
             if (
                 Settings.ENABLE_CHECKPOINT_RESUME
+                and self._can_resume_from_checkpoint()
                 and observability_repo.already_successful(
                     "RFB_LOADER_ENTERPRISE",
                     table_name,

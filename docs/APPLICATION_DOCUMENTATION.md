@@ -45,7 +45,32 @@ O arquivo `app/etl/rfb_manifest.py` centraliza o mapeamento entre arquivos, tabe
 
 Ao final da carga bruta, se `PROMOTE_RAW_IMPORT_AFTER_LOAD=True`, o `RawImportPromotionRepository` promove `rfb_import` para `dados_rfb`.
 
-Regras:
+Estrategia padrao:
+
+```env
+DB_PROMOTION_STRATEGY=rename_swap
+```
+
+Com `rename_swap`, o ETL move as tabelas carregadas em `rfb_import` para `dados_rfb` com `RENAME TABLE`.
+Essa operacao evita `INSERT INTO ... SELECT` em tabelas gigantes e deve reduzir em pelo menos 80% o tempo de promocao.
+Ao final de cada tabela promovida, a tabela bruta correspondente e recriada vazia em `rfb_import` para a proxima execucao.
+
+Regras da estrategia `rename_swap`:
+
+- valida que as tabelas com arquivos encontrados possuem registros em `rfb_import`;
+- audita campos monitorados antes de mover a tabela;
+- move cada tabela de `rfb_import` para `dados_rfb`;
+- se a tabela final ja existir, troca a tabela final por uma tabela nova carregada;
+- registra a promocao em `dados_rfb.controle_alteracao`;
+- registra tempo por tabela e tempo total de promocao.
+
+A estrategia antiga continua disponivel com:
+
+```env
+DB_PROMOTION_STRATEGY=copy
+```
+
+Regras da estrategia `copy`:
 
 - se `dados_rfb` nao existir, cria e copia todas as tabelas;
 - se `dados_rfb` existir, compara contagem e checksum por tabela;
@@ -79,6 +104,52 @@ CONTROL_DIFF_DETAIL_TABLES=cnae,moti,munic,natju,pais,quals
 CONTROL_DIFF_MAX_ROWS=1000
 ```
 
+### Auditoria Seletiva De Campos
+
+Para manter historico de mudancas importantes sem comparar todos os campos das tabelas grandes, o ETL usa auditoria seletiva.
+
+Tabelas envolvidas:
+
+```text
+controle_campo_monitorado  -> configuracao administrada no banco
+estado_campo_monitorado    -> ultimo valor conhecido por chave/campo
+historico_campo_monitorado -> alteracoes detectadas por execucao mensal
+```
+
+Fluxo:
+
+1. O administrador cadastra em `controle_campo_monitorado` os campos que devem ser auditados.
+2. Antes do `rename_swap`, o ETL compara o novo `rfb_import` com `estado_campo_monitorado`.
+3. Quando o valor muda, grava uma linha em `historico_campo_monitorado`.
+4. Depois atualiza `estado_campo_monitorado` com os valores do arquivo novo.
+5. Em seguida executa o `rename_swap`.
+
+Campo padrao criado na primeira execucao:
+
+```text
+estabelecimento.situacao_cadastral
+```
+
+Esse campo permite consultar quando um estabelecimento mudou de situacao, por exemplo de ativo para inativo e depois para ativo novamente.
+
+Exemplo de inclusao de campo monitorado pelo administrador:
+
+```sql
+INSERT INTO dados_rfb.controle_campo_monitorado (tabela, campo, ativo, observacao)
+VALUES ('estabelecimento', 'motivo_situacao_cadastral', 1, 'Auditar motivo de alteracao cadastral')
+ON DUPLICATE KEY UPDATE ativo = VALUES(ativo), observacao = VALUES(observacao);
+```
+
+Recomendacao de permissao:
+
+```sql
+REVOKE INSERT, UPDATE, DELETE ON dados_rfb.controle_campo_monitorado FROM 'usuario_app'@'%';
+GRANT SELECT ON dados_rfb.controle_campo_monitorado TO 'usuario_app'@'%';
+```
+
+O usuario operacional da aplicacao precisa criar as tabelas na primeira execucao. Em ambiente controlado, apos a criacao inicial, a alteracao da configuracao deve ficar restrita ao administrador.
+Depois de cadastrar os campos definitivos e restringir permissao de escrita, use `MONITORED_FIELDS_BOOTSTRAP_DEFAULTS=False` para evitar tentativas de bootstrap pelo ETL.
+
 ### Banco Operacional
 
 O banco `dados_rfb_ops` guarda status, progresso, checkpoint e metricas:
@@ -95,6 +166,15 @@ data_quality_rule
 ```
 
 Essas tabelas nao devem ficar no `rfb_import`, porque ele deve permanecer dedicado a carga bruta dos arquivos da Receita.
+
+### Requisitos De Performance E Documentacao
+
+- A promocao `rfb_import -> dados_rfb` deve evitar copia linha-a-linha quando `DB_PROMOTION_STRATEGY=rename_swap`.
+- A meta minima e reduzir em pelo menos 80% o tempo de promocao em relacao ao modo `copy`.
+- O log deve mostrar tempo por tabela na carga, tempo por tabela na promocao, tempo total de carga, tempo total de promocao e tempo total do pipeline.
+- Toda nova versao ou branch com alteracao funcional deve atualizar `README.md`, `docs/APPLICATION_DOCUMENTATION.md` e, quando aplicavel, `docs/REQUIREMENTS.md`.
+
+Ver tambem: [Requisitos](REQUIREMENTS.md).
 
 ---
 
