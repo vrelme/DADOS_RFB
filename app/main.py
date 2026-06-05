@@ -10,9 +10,13 @@ from app.exceptions import AppError, DatabaseOperationError
 from app.logger import setup_logger
 from app.database import (
     Base,
+    create_server_engine,
     engine,
     operational_engine,
     ensure_database_exists,
+    is_database_connection_lost,
+    mysql_error_code,
+    wait_for_database_recovery,
 )
 from app.models import (
     Empresa,
@@ -142,8 +146,21 @@ def reset_raw_import_schema(logger):
     )
     ensure_database_exists(Settings.ACTIVE_DB_NAME)
     safe_name = Settings.ACTIVE_DB_NAME.replace("`", "``")
-    with engine.begin() as conn:
-        conn.execute(text(f"DROP DATABASE IF EXISTS `{safe_name}`"))
+    admin_engine = create_server_engine(
+        read_timeout=Settings.DB_PROMOTION_READ_TIMEOUT,
+        write_timeout=Settings.DB_PROMOTION_WRITE_TIMEOUT,
+    )
+    try:
+        with admin_engine.begin() as conn:
+            conn.execute(
+                text(
+                    "SET SESSION lock_wait_timeout = "
+                    f"{int(Settings.DB_PROMOTION_LOCK_WAIT_TIMEOUT)}"
+                )
+            )
+            conn.execute(text(f"DROP DATABASE IF EXISTS `{safe_name}`"))
+    finally:
+        admin_engine.dispose()
 
     engine.dispose()
 
@@ -208,14 +225,38 @@ def run_etl(logger):
     """
     logger.info("Iniciando pipelines ETL...")
 
-    orchestrator = ETLOrchestrator()
+    orchestrator = ETLOrchestrator(logger_instance=logger)
     orchestrator.run()
 
 
-def mysql_error_code(error):
-    original = getattr(error, "orig", None)
-    args = getattr(original, "args", None)
-    return args[0] if args else None
+def execute_with_database_recovery(logger, operation_name, operation):
+    attempt = 0
+
+    while True:
+        attempt += 1
+        try:
+            return operation()
+
+        except (SQLAlchemyError, DatabaseOperationError) as exc:
+            if not (
+                Settings.DB_RECOVERY_ENABLED
+                and is_database_connection_lost(exc)
+            ):
+                raise
+
+            logger.error(
+                f"DB RECOVERY | conexao perdida | "
+                f"operacao={operation_name} | tentativa_execucao={attempt} | "
+                f"erro={exc}"
+            )
+            wait_for_database_recovery(
+                logger,
+                context=f"operacao={operation_name}",
+            )
+            logger.info(
+                f"DB RECOVERY | retomando operacao | "
+                f"operacao={operation_name} | proxima_tentativa={attempt + 1}"
+            )
 
 
 def main():
@@ -231,13 +272,22 @@ def main():
 
         has_files = validate_input_files(logger)
 
-        create_database(logger)
+        execute_with_database_recovery(
+            logger,
+            "create_database",
+            lambda: create_database(logger),
+        )
 
         if not has_files:
             logger.warning("Execução encerrada: sem arquivos para processar.")
             return
 
-        run_etl(logger)
+        etl_orchestrator = ETLOrchestrator(logger_instance=logger)
+        execute_with_database_recovery(
+            logger,
+            "run_etl",
+            etl_orchestrator.run,
+        )
 
         total = time.time() - start
 

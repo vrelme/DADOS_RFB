@@ -5,9 +5,11 @@ import logging
 
 from datetime import datetime
 
+from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.database import mysql_error_code
 from app.models import (
     ETLCheckpoint,
     ETLDeadLetter,
@@ -53,31 +55,71 @@ class ObservabilityRepository:
         return run
 
     def heartbeat_run(self, run_id):
+        self._update_run_best_effort(
+            run_id,
+            "UPDATE etl_run "
+            "SET heartbeat_at = :heartbeat_at "
+            "WHERE id = :run_id AND status = 'RUNNING'",
+            {
+                "heartbeat_at": datetime.utcnow(),
+                "run_id": run_id,
+            },
+            warning_message="Falha ao atualizar heartbeat do run",
+        )
+
+    def _update_run_best_effort(self, run_id, sql, params, warning_message):
         try:
-            run = self.db.get(ETLRun, run_id)
-            if run and run.status == "RUNNING":
-                run.heartbeat_at = datetime.utcnow()
-                self.db.commit()
+            self.db.execute(text(sql), params)
+            self.db.commit()
         except SQLAlchemyError as exc:
             self.db.rollback()
-            logger.warning(f"Falha ao atualizar heartbeat do run: {exc}")
+            if mysql_error_code(exc) == 1020:
+                logger.info(
+                    "Atualizacao do etl_run ignorada por concorrencia; "
+                    f"run_id={run_id}"
+                )
+                return
+            logger.warning(f"{warning_message}: {exc}")
 
-    def update_run_context(self, run_id, phase=None, table_name=None, file_name=None):
+    def resume_run(self, run_id):
         try:
             run = self.db.get(ETLRun, run_id)
             if not run:
                 return
-            if phase is not None:
-                run.current_phase = phase
-            if table_name is not None:
-                run.current_table = table_name
-            if file_name is not None:
-                run.current_file = file_name
+            run.status = "RUNNING"
+            run.finished_at = None
+            run.error_message = None
             run.heartbeat_at = datetime.utcnow()
             self.db.commit()
         except SQLAlchemyError as exc:
             self.db.rollback()
-            logger.warning(f"Falha ao atualizar contexto do run: {exc}")
+            logger.warning(f"Falha ao retomar run ETL: {exc}")
+
+    def update_run_context(self, run_id, phase=None, table_name=None, file_name=None):
+        updates = ["heartbeat_at = :heartbeat_at"]
+        params = {
+            "run_id": run_id,
+            "heartbeat_at": datetime.utcnow(),
+        }
+
+        if phase is not None:
+            updates.append("current_phase = :current_phase")
+            params["current_phase"] = phase
+        if table_name is not None:
+            updates.append("current_table = :current_table")
+            params["current_table"] = table_name
+        if file_name is not None:
+            updates.append("current_file = :current_file")
+            params["current_file"] = file_name
+
+        self._update_run_best_effort(
+            run_id,
+            "UPDATE etl_run SET "
+            + ", ".join(updates)
+            + " WHERE id = :run_id AND status = 'RUNNING'",
+            params,
+            warning_message="Falha ao atualizar contexto do run",
+        )
 
     def finish_run(self, run_id, status="SUCCESS", error_message=None):
         try:
@@ -107,13 +149,13 @@ class ObservabilityRepository:
                 message=message,
             )
             self.db.add(phase)
-            run = self.db.get(ETLRun, run_id)
-            if run:
-                run.current_phase = phase_name
-                run.current_table = table_name
-                run.heartbeat_at = datetime.utcnow()
             self.db.commit()
             self.db.refresh(phase)
+            self.update_run_context(
+                run_id,
+                phase=phase_name,
+                table_name=table_name,
+            )
             return phase
         except SQLAlchemyError as exc:
             self.db.rollback()
@@ -161,14 +203,13 @@ class ObservabilityRepository:
             item.finished_at = None
             item.error_message = None
 
-            run = self.db.get(ETLRun, run_id)
-            if run:
-                run.current_table = table_name
-                run.current_file = file_name
-                run.heartbeat_at = datetime.utcnow()
-
             self.db.commit()
             self.db.refresh(item)
+            self.update_run_context(
+                run_id,
+                table_name=table_name,
+                file_name=file_name,
+            )
             return item
         except SQLAlchemyError as exc:
             self.db.rollback()
@@ -197,32 +238,91 @@ class ObservabilityRepository:
                 )
                 item.error_message = str(error_message)[:5000] if error_message else None
 
-            run = self.db.get(ETLRun, run_id)
-            if run:
-                if status in {"SUCCESS", "SKIPPED"}:
-                    run.completed_files = (run.completed_files or 0) + 1
-                    run.total_records = (run.total_records or 0) + (records_processed or 0)
-                elif status == "FAILED":
-                    run.failed_files = (run.failed_files or 0) + 1
-
-                done = (run.completed_files or 0) + (run.failed_files or 0)
-                if run.total_files:
-                    run.progress_percent = round((done / run.total_files) * 100, 2)
-
-                elapsed = (finished_at - run.started_at).total_seconds()
-                if done > 0 and run.total_files and done < run.total_files:
-                    seconds_per_file = elapsed / done
-                    remaining = max(run.total_files - done, 0) * seconds_per_file
-                    run.estimated_finish_at = datetime.fromtimestamp(
-                        finished_at.timestamp() + remaining
-                    )
-
-                run.heartbeat_at = finished_at
-
             self.db.commit()
+            self._finish_file_progress_run_update(
+                run_id,
+                status,
+                records_processed,
+                finished_at,
+            )
         except SQLAlchemyError as exc:
             self.db.rollback()
             logger.warning(f"Falha ao finalizar progresso de arquivo: {exc}")
+
+    def _finish_file_progress_run_update(
+        self,
+        run_id,
+        status,
+        records_processed,
+        finished_at,
+    ):
+        if status in {"SUCCESS", "SKIPPED"}:
+            sql = """
+                UPDATE etl_run
+                SET
+                    completed_files = COALESCE(completed_files, 0) + 1,
+                    total_records = COALESCE(total_records, 0) + :records_processed,
+                    progress_percent = CASE
+                        WHEN COALESCE(total_files, 0) > 0 THEN
+                            ROUND(
+                                (
+                                    (COALESCE(completed_files, 0)
+                                     + COALESCE(failed_files, 0)
+                                     + 1) / total_files
+                                ) * 100,
+                                2
+                            )
+                        ELSE progress_percent
+                    END,
+                    heartbeat_at = :heartbeat_at
+                WHERE id = :run_id AND status = 'RUNNING'
+            """
+            params = {
+                "run_id": run_id,
+                "records_processed": records_processed or 0,
+                "heartbeat_at": finished_at,
+            }
+        elif status == "FAILED":
+            sql = """
+                UPDATE etl_run
+                SET
+                    failed_files = COALESCE(failed_files, 0) + 1,
+                    progress_percent = CASE
+                        WHEN COALESCE(total_files, 0) > 0 THEN
+                            ROUND(
+                                (
+                                    (COALESCE(completed_files, 0)
+                                     + COALESCE(failed_files, 0)
+                                     + 1) / total_files
+                                ) * 100,
+                                2
+                            )
+                        ELSE progress_percent
+                    END,
+                    heartbeat_at = :heartbeat_at
+                WHERE id = :run_id AND status = 'RUNNING'
+            """
+            params = {
+                "run_id": run_id,
+                "heartbeat_at": finished_at,
+            }
+        else:
+            sql = """
+                UPDATE etl_run
+                SET heartbeat_at = :heartbeat_at
+                WHERE id = :run_id AND status = 'RUNNING'
+            """
+            params = {
+                "run_id": run_id,
+                "heartbeat_at": finished_at,
+            }
+
+        self._update_run_best_effort(
+            run_id,
+            sql,
+            params,
+            warning_message="Falha ao atualizar progresso do run",
+        )
 
 
     def metric(
@@ -300,6 +400,20 @@ class ObservabilityRepository:
                 ETLCheckpoint.table_name == table_name,
                 ETLCheckpoint.file_name == file_name,
                 ETLCheckpoint.status == "SUCCESS",
+            )
+            .one_or_none()
+        )
+        return item is not None
+
+    def already_successful_in_run(self, run_id, pipeline, table_name, file_name):
+        item = (
+            self.db.query(ETLFileProgress)
+            .filter(
+                ETLFileProgress.run_id == run_id,
+                ETLFileProgress.pipeline == pipeline,
+                ETLFileProgress.table_name == table_name,
+                ETLFileProgress.file_name == file_name,
+                ETLFileProgress.status == "SUCCESS",
             )
             .one_or_none()
         )

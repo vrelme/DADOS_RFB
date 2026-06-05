@@ -135,6 +135,8 @@ class Settings:
 
     DB_CONNECT_TIMEOUT = int(os.getenv("DB_CONNECT_TIMEOUT", 30))
 
+    DB_HEALTH_CHECK_TIMEOUT = int(os.getenv("DB_HEALTH_CHECK_TIMEOUT", 5))
+
     DB_READ_TIMEOUT = int(os.getenv("DB_READ_TIMEOUT", 600))
 
     DB_WRITE_TIMEOUT = int(os.getenv("DB_WRITE_TIMEOUT", 600))
@@ -149,6 +151,10 @@ class Settings:
 
     DB_PROMOTION_BATCH_SIZE = int(
         os.getenv("DB_PROMOTION_BATCH_SIZE", 50000)
+    )
+
+    DB_PROMOTION_LOCK_WAIT_TIMEOUT = int(
+        os.getenv("DB_PROMOTION_LOCK_WAIT_TIMEOUT", 3600)
     )
 
     DB_PROMOTION_STRATEGY = os.getenv(
@@ -188,6 +194,10 @@ class Settings:
 
     MONITORED_FIELDS_BOOTSTRAP_DEFAULTS = (
         os.getenv("MONITORED_FIELDS_BOOTSTRAP_DEFAULTS", "True").lower() == "true"
+    )
+
+    MONITORED_FIELD_BATCH_SIZE = int(
+        os.getenv("MONITORED_FIELD_BATCH_SIZE", DB_PROMOTION_BATCH_SIZE)
     )
 
     # =====================================================
@@ -324,6 +334,34 @@ class Settings:
     MAX_RETRIES = int(os.getenv("MAX_RETRIES", 3))
 
     RETRY_DELAY = int(os.getenv("RETRY_DELAY", 5))
+
+    DB_RECOVERY_ENABLED = (
+        os.getenv("DB_RECOVERY_ENABLED", "True").lower() == "true"
+    )
+
+    DB_RECOVERY_FAST_INTERVAL_SECONDS = int(
+        os.getenv("DB_RECOVERY_FAST_INTERVAL_SECONDS", 5)
+    )
+
+    DB_RECOVERY_MEDIUM_INTERVAL_SECONDS = int(
+        os.getenv("DB_RECOVERY_MEDIUM_INTERVAL_SECONDS", 60)
+    )
+
+    DB_RECOVERY_SLOW_INTERVAL_SECONDS = int(
+        os.getenv("DB_RECOVERY_SLOW_INTERVAL_SECONDS", 300)
+    )
+
+    DB_RECOVERY_FAST_UNTIL_SECONDS = int(
+        os.getenv("DB_RECOVERY_FAST_UNTIL_SECONDS", 600)
+    )
+
+    DB_RECOVERY_MEDIUM_UNTIL_SECONDS = int(
+        os.getenv("DB_RECOVERY_MEDIUM_UNTIL_SECONDS", 1800)
+    )
+
+    DB_RECOVERY_MAX_WAIT_SECONDS = int(
+        os.getenv("DB_RECOVERY_MAX_WAIT_SECONDS", 0)
+    )
 
     # =====================================================
     # FILES

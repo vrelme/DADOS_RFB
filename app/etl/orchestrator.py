@@ -124,11 +124,17 @@ class ETLOrchestrator:
         self._table_load_timings = {}
         self._promotion_timings = None
         self._pipeline_started_at = None
+        self._heartbeat_lock = threading.Lock()
+        self._heartbeat_active = False
 
     # =====================================================
     # HEARTBEAT
     # =====================================================
     def _heartbeat(self):  # <- incluída no código
+
+        if self._heartbeat_active:
+            return
+        self._heartbeat_active = True
 
         while True:
 
@@ -136,12 +142,13 @@ class ETLOrchestrator:
                 "HEARTBEAT     | ETL em execução..."
             )
 
-            if self.run_id:
+            if self.run_id and self._heartbeat_lock.acquire(blocking=False):
                 db = OperationalSessionLocal()
                 try:
                     ObservabilityRepository(db).heartbeat_run(self.run_id)
                 finally:
                     db.close()
+                    self._heartbeat_lock.release()
 
             time.sleep(60)
 
@@ -176,6 +183,8 @@ class ETLOrchestrator:
 
         if not self.run_id:
             self.run_id = self._start_run()
+        else:
+            self._resume_run()
 
         # =============================================
         # HEARTBEAT THREAD
@@ -262,6 +271,14 @@ class ETLOrchestrator:
                 error_message=error_message,
             )
             self.logger.info(f"ETL RUN {status} | id={self.run_id}")
+        finally:
+            db.close()
+
+    def _resume_run(self):
+        db = OperationalSessionLocal()
+        try:
+            ObservabilityRepository(db).resume_run(self.run_id)
+            self.logger.info(f"ETL RUN RESUME | id={self.run_id}")
         finally:
             db.close()
 
@@ -464,7 +481,7 @@ class ETLOrchestrator:
         elapsed = round(time.time() - start_parallel, 2)
         self.logger.info("-" * 80)
         self.logger.info(
-            f"PARALELISMO ADAPTATIVO FINALIZADO | "
+            f"PARALELISMO ADAPTATIVO FINALIZADO   | "
             f"arquivos={completed} | {elapsed}s"
         )
 
@@ -618,13 +635,14 @@ class ETLOrchestrator:
         db = SessionLocal()
         try:
             for table_name in sorted(self._raw_import_expected_tables):
-                total = db.execute(
-                    text(f"SELECT COUNT(*) FROM `{table_name}`")
-                ).scalar()
+                has_rows = db.execute(
+                    text(f"SELECT 1 FROM `{table_name}` LIMIT 1")
+                ).first()
                 self.logger.info(
-                    f"VALIDACAO RAW_IMPORT | {table_name}: {int(total or 0)} registros"
+                    f"VALIDACAO RAW_IMPORT | {table_name}: "
+                    f"{'com registros' if has_rows else 'vazia'}"
                 )
-                if not total:
+                if not has_rows:
                     empty_tables.append(table_name)
         finally:
             db.close()
@@ -966,7 +984,16 @@ class ETLOrchestrator:
             )
             self.logger.info("-" * 80)
 
-            if (
+            already_successful_in_current_run = (
+                self.run_id
+                and observability_repo.already_successful_in_run(
+                    self.run_id,
+                    "RFB_LOADER_ENTERPRISE",
+                    table_name,
+                    file_path.name,
+                )
+            )
+            already_successful_checkpoint = (
                 Settings.ENABLE_CHECKPOINT_RESUME
                 and self._can_resume_from_checkpoint()
                 and observability_repo.already_successful(
@@ -974,7 +1001,15 @@ class ETLOrchestrator:
                     table_name,
                     file_path.name,
                 )
-            ):
+            )
+
+            if already_successful_in_current_run:
+                self.logger.info(
+                    f"CHECKPOINT | arquivo ja concluido neste run: {file_path.name}"
+                )
+                return
+
+            if already_successful_checkpoint:
                 self.logger.info(
                     f"CHECKPOINT | arquivo já processado com sucesso: {file_path.name}"
                 )
@@ -1065,7 +1100,7 @@ class ETLOrchestrator:
                         records_processed=total,
                     )
                 self.logger.info(
-                    f"FINALIZADO | "
+                    f"FINALIZADO   | "
                     f"{file_path.name} | "
                     f"{total} registros | "
                     f"{total_time}s"
@@ -1192,7 +1227,7 @@ class ETLOrchestrator:
             )
 
             self.logger.info(
-                f"FINALIZADO | "
+                f"FINALIZADO   | "
                 f"{file_path.name} | "
                 f"{total} registros | "
                 f"{total_time}s"

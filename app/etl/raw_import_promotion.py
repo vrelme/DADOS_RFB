@@ -15,6 +15,7 @@ from app.etl.rfb_manifest import RFB_TABLES, RFB_TABLES_BY_NAME, raw_import_crea
 
 
 logger = logging.getLogger(__name__)
+error_detail_logger = logging.getLogger("error_detail")
 
 
 def quote_identifier(value: str) -> str:
@@ -153,8 +154,7 @@ class RawImportPromotionRepository:
 
         started_at = time.time()
         for field_name in fields:
-            inserted = self._insert_monitored_field_history(table_name, field_name)
-            self._refresh_monitored_field_state(table_name, field_name)
+            inserted = self._monitor_field_in_batches(table_name, field_name)
             logger.info(
                 f"MONITORAMENTO | {table_name}.{field_name} | "
                 f"{inserted} alteracoes registradas"
@@ -185,6 +185,62 @@ class RawImportPromotionRepository:
                 )
         return fields
 
+    def _monitor_field_in_batches(self, table_name, field_name):
+        batch_size = Settings.MONITORED_FIELD_BATCH_SIZE
+
+        if batch_size <= 0:
+            inserted = self._insert_monitored_field_history(table_name, field_name)
+            self._refresh_monitored_field_state(table_name, field_name)
+            return inserted
+
+        inserted = 0
+        offset = 0
+
+        while self._import_batch_has_rows(table, batch_size, offset):
+            inserted += self._insert_monitored_field_history(
+                table_name,
+                field_name,
+                batch_size=batch_size,
+                offset=offset,
+            )
+            self._refresh_monitored_field_state(
+                table_name,
+                field_name,
+                batch_size=batch_size,
+                offset=offset,
+            )
+            offset += batch_size
+            logger.info(
+                f"MONITORAMENTO | {table_name}.{field_name}: "
+                f"{offset} registros avaliados"
+            )
+
+        return inserted
+
+    def _import_batch_has_rows(self, table, batch_size, offset):
+        import_table = f"{quote_identifier(self.import_db)}.{quote_identifier(table.table_name)}"
+        order_by = ", ".join(quote_identifier(column) for column in table.key_columns)
+        sql = (
+            f"SELECT 1 FROM {import_table} "
+            f"ORDER BY {order_by} "
+            f"LIMIT 1 OFFSET {int(offset)}"
+        )
+        with self.final_engine.connect() as conn:
+            return conn.execute(text(sql)).first() is not None
+
+    def _monitoring_source_sql(self, table, alias, batch_size=None, offset=0):
+        import_table = f"{quote_identifier(self.import_db)}.{quote_identifier(table.table_name)}"
+
+        if not batch_size or batch_size <= 0:
+            return f"{import_table} {alias}"
+
+        order_by = ", ".join(quote_identifier(column) for column in table.key_columns)
+        return (
+            f"(SELECT * FROM {import_table} "
+            f"ORDER BY {order_by} "
+            f"LIMIT {int(batch_size)} OFFSET {int(offset)}) {alias}"
+        )
+
     def _monitor_key_expr(self, alias, key_columns):
         parts = [
             f"COALESCE(CAST({alias}.{quote_identifier(column)} AS CHAR), '')"
@@ -192,9 +248,15 @@ class RawImportPromotionRepository:
         ]
         return "CONCAT_WS('|', " + ", ".join(parts) + ")"
 
-    def _insert_monitored_field_history(self, table_name, field_name):
+    def _insert_monitored_field_history(
+        self,
+        table_name,
+        field_name,
+        batch_size=None,
+        offset=0,
+    ):
         table = RFB_TABLES_BY_NAME[table_name]
-        import_table = f"{quote_identifier(self.import_db)}.{quote_identifier(table_name)}"
+        source_sql = self._monitoring_source_sql(table, "n", batch_size, offset)
         state_table = f"{quote_identifier(self.final_db)}.estado_campo_monitorado"
         history_table = f"{quote_identifier(self.final_db)}.historico_campo_monitorado"
         key_expr = self._monitor_key_expr("n", table.key_columns)
@@ -213,29 +275,36 @@ class RawImportPromotionRepository:
                 {value_expr},
                 :data_movimento,
                 :hora_movimento
-            FROM {import_table} n
+            FROM {source_sql}
             INNER JOIN {state_table} s
                 ON s.tabela = :table_name
                 AND s.campo = :field_name
                 AND s.chave_hash = SHA2({key_expr}, 256)
             WHERE NOT (COALESCE(s.valor_atual, '') = {value_expr})
         """
-        with self.final_engine.begin() as conn:
-            self._prepare_promotion_session(conn)
-            result = conn.execute(
-                text(sql),
-                {
-                    "table_name": table_name,
-                    "field_name": field_name,
-                    "data_movimento": now.date(),
-                    "hora_movimento": now.time().replace(microsecond=0),
-                },
-            )
-            return result.rowcount or 0
+        result = self._execute_monitoring_sql_with_retries(
+            operation="historico",
+            table_name=table_name,
+            field_name=field_name,
+            sql=sql,
+            params={
+                "table_name": table_name,
+                "field_name": field_name,
+                "data_movimento": now.date(),
+                "hora_movimento": now.time().replace(microsecond=0),
+            },
+        )
+        return result.rowcount or 0
 
-    def _refresh_monitored_field_state(self, table_name, field_name):
+    def _refresh_monitored_field_state(
+        self,
+        table_name,
+        field_name,
+        batch_size=None,
+        offset=0,
+    ):
         table = RFB_TABLES_BY_NAME[table_name]
-        import_table = f"{quote_identifier(self.import_db)}.{quote_identifier(table_name)}"
+        source_sql = self._monitoring_source_sql(table, "n", batch_size, offset)
         state_table = f"{quote_identifier(self.final_db)}.estado_campo_monitorado"
         key_expr = self._monitor_key_expr("n", table.key_columns)
         value_expr = f"COALESCE(CAST(n.{quote_identifier(field_name)} AS CHAR), '')"
@@ -249,7 +318,7 @@ class RawImportPromotionRepository:
                 {key_expr},
                 {value_expr},
                 NOW()
-            FROM {import_table} n
+            FROM {source_sql}
             ON DUPLICATE KEY UPDATE
                 chave = VALUES(chave),
                 valor_atual = VALUES(valor_atual),
@@ -259,14 +328,90 @@ class RawImportPromotionRepository:
                     VALUES(updated_at)
                 )
         """
-        with self.final_engine.begin() as conn:
-            self._prepare_promotion_session(conn)
-            conn.execute(
-                text(sql),
-                {
-                    "table_name": table_name,
-                    "field_name": field_name,
-                },
+        self._execute_monitoring_sql_with_retries(
+            operation="estado",
+            table_name=table_name,
+            field_name=field_name,
+            sql=sql,
+            params={
+                "table_name": table_name,
+                "field_name": field_name,
+            },
+        )
+
+    def _execute_monitoring_sql_with_retries(
+        self,
+        operation,
+        table_name,
+        field_name,
+        sql,
+        params,
+    ):
+        last_error = None
+
+        max_retries = max(1, Settings.MAX_RETRIES)
+
+        for attempt in range(1, max_retries + 1):
+            try:
+                with self.final_engine.begin() as conn:
+                    self._prepare_promotion_session(conn)
+                    return conn.execute(text(sql), params)
+
+            except SQLAlchemyError as exc:
+                last_error = exc
+
+                if self._mysql_error_code(exc) != 1205 or attempt == max_retries:
+                    raise
+
+                logger.warning(
+                    "MONITORAMENTO | lock timeout | "
+                    f"{table_name}.{field_name} | operacao={operation} | "
+                    f"tentativa={attempt}/{max_retries} | "
+                )
+                error_detail_logger.warning(
+                    "MONITORAMENTO | lock timeout | "
+                    f"{table_name}.{field_name} | operacao={operation} | "
+                    f"tentativa={attempt}/{max_retries} | erro={exc}"
+                )
+                self._log_database_processes()
+                time.sleep(Settings.RETRY_DELAY)
+
+        raise last_error
+
+    def _mysql_error_code(self, error):
+        original = getattr(error, "orig", None)
+        args = getattr(original, "args", None)
+
+        if args:
+            return args[0]
+
+        return None
+
+    def _log_database_processes(self):
+        try:
+            with self.final_engine.connect() as conn:
+                result = conn.execute(text("SHOW FULL PROCESSLIST"))
+
+                for row in result.mappings():
+                    info = row.get("Info")
+                    if not info:
+                        continue
+
+                    logger.warning(
+                        "PROCESSLIST | "
+                        f"Id={row.get('Id')} | "
+                        f"User={row.get('User')} | "
+                        f"Host={row.get('Host')} | "
+                        f"Db={row.get('db') or row.get('Db')} | "
+                        f"Command={row.get('Command')} | "
+                        f"Time={row.get('Time')} | "
+                        f"State={row.get('State')} | "
+                        f"Info={str(info)[:500]}"
+                    )
+
+        except SQLAlchemyError as exc:
+            logger.warning(
+                f"Nao foi possivel consultar SHOW FULL PROCESSLIST: {exc}"
             )
 
     def _database_exists(self, database_name):
@@ -528,6 +673,18 @@ class RawImportPromotionRepository:
         conn.execute(text(f"SET SESSION wait_timeout = {int(timeout)}"))
         conn.execute(text(f"SET SESSION net_read_timeout = {int(timeout)}"))
         conn.execute(text(f"SET SESSION net_write_timeout = {int(timeout)}"))
+        conn.execute(
+            text(
+                "SET SESSION innodb_lock_wait_timeout = "
+                f"{int(Settings.DB_PROMOTION_LOCK_WAIT_TIMEOUT)}"
+            )
+        )
+        conn.execute(
+            text(
+                "SET SESSION lock_wait_timeout = "
+                f"{int(Settings.DB_PROMOTION_LOCK_WAIT_TIMEOUT)}"
+            )
+        )
 
     def _table_signature(self, database_name, table_name, columns):
         table_ref = f"{quote_identifier(database_name)}.{quote_identifier(table_name)}"

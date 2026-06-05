@@ -40,6 +40,7 @@ class DatabaseOperationError(DatabaseError):
     ):
         self.operation = operation
         self.table_name = table_name
+        self.original_exception = original_error
         self.user_message = user_message
         self.original_error = str(original_error) if original_error else None
 
