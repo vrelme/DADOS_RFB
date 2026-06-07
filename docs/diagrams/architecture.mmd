@@ -1,17 +1,30 @@
 flowchart LR
     User["Operador"] --> Main["app.main"]
     Main --> Config["Settings (.env)"]
-    Main --> DB["SQLAlchemy Engine"]
+    Main --> CreateDB["Cria schemas e tabelas"]
     Main --> Orchestrator["ETLOrchestrator"]
 
-    Orchestrator --> Workers["ProcessPoolExecutor"]
-    Workers --> Loader["BulkRepository"]
-    Loader --> Staging["Tabelas staging"]
-    Staging --> Merge["Merge centralizado"]
-    Merge --> Final["Tabelas finais"]
+    subgraph Input["Arquivos RFB descompactados"]
+        EmpresaFiles["*.EMPRECSV"]
+        EstabFiles["*.ESTABELE"]
+        SocioFiles["*.SOCIOCSV"]
+        SimplesFiles["*.SIMPLES.CSV.*"]
+        DomainFiles["*.CNAECSV / MOTICSV / MUNICCSV / NATJUCSV / PAISCSV / QUALSCSV"]
+    end
 
-    Orchestrator --> Audit["ETLExecutionRepository"]
-    Audit --> Control["etl_execution"]
+    Orchestrator --> Manifest["RFB_TABLES manifesto"]
+    Manifest --> Loader["BulkRepository LOAD DATA"]
+    Input --> Loader
+    Loader --> ImportDB[("rfb_import raw tables")]
 
-    Loader --> Logs["Logs operacionais"]
-    Main --> Logs
+    Orchestrator --> OpsRepo["ObservabilityRepository / ETLExecutionRepository"]
+    OpsRepo --> OpsDB[("dados_rfb_ops")]
+
+    Orchestrator --> Promotion["RawImportPromotionRepository"]
+    ImportDB --> Promotion
+    Promotion --> FinalDB[("dados_rfb final")]
+    Promotion --> Control["controle_alteracao"]
+    Control --> FinalDB
+
+    Orchestrator --> Logs["Logs operacionais"]
+    Loader --> Logs

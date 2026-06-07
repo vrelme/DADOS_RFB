@@ -352,6 +352,219 @@ class ETLExecution(Base):
 
 
 # =====================================================
+# ETL RUN / OPERATIONAL STATUS
+# =====================================================
+class ETLRun(Base):
+    __tablename__ = "etl_run"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+
+    pipeline = Column(String(100), nullable=False, index=True)
+
+    status = Column(String(30), nullable=False, index=True)
+
+    sync_strategy = Column(String(50))
+
+    load_target = Column(String(50))
+
+    active_database = Column(String(100))
+
+    current_phase = Column(String(100), index=True)
+
+    current_table = Column(String(100), index=True)
+
+    current_file = Column(String(255))
+
+    total_files = Column(Integer, default=0)
+
+    completed_files = Column(Integer, default=0)
+
+    failed_files = Column(Integer, default=0)
+
+    total_records = Column(BigInteger, default=0)
+
+    progress_percent = Column(Float, default=0)
+
+    started_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    heartbeat_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    estimated_finish_at = Column(DateTime)
+
+    finished_at = Column(DateTime)
+
+    duration_seconds = Column(Integer)
+
+    error_message = Column(Text)
+
+    __table_args__ = (
+        Index("idx_etl_run_status_started", "status", "started_at"),
+    )
+
+
+class ETLRunPhase(Base):
+    __tablename__ = "etl_run_phase"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+
+    run_id = Column(BigInteger, nullable=False, index=True)
+
+    phase_name = Column(String(100), nullable=False, index=True)
+
+    table_name = Column(String(100), index=True)
+
+    status = Column(String(30), nullable=False, index=True)
+
+    started_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    finished_at = Column(DateTime)
+
+    duration_seconds = Column(Integer)
+
+    message = Column(Text)
+
+
+class ETLFileProgress(Base):
+    __tablename__ = "etl_file_progress"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+
+    run_id = Column(BigInteger, nullable=False, index=True)
+
+    pipeline = Column(String(100), nullable=False, index=True)
+
+    table_name = Column(String(100), nullable=False, index=True)
+
+    file_name = Column(String(255), nullable=False, index=True)
+
+    status = Column(String(30), nullable=False, index=True)
+
+    records_processed = Column(BigInteger, default=0)
+
+    started_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    finished_at = Column(DateTime)
+
+    duration_seconds = Column(Integer)
+
+    throughput_rows_per_second = Column(Float, default=0)
+
+    error_message = Column(Text)
+
+    __table_args__ = (
+        Index("idx_file_progress_run_status", "run_id", "status"),
+    )
+
+
+# =====================================================
+# ETL METRICS - GRAFANA
+# =====================================================
+class ETLMetric(Base):
+    __tablename__ = "etl_metric"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+
+    pipeline = Column(String(100), nullable=False, index=True)
+
+    table_name = Column(String(100), index=True)
+
+    file_name = Column(String(255), index=True)
+
+    metric_name = Column(String(100), nullable=False, index=True)
+
+    metric_value = Column(Float, nullable=False)
+
+    unit = Column(String(50))
+
+    worker = Column(String(100))
+
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    __table_args__ = (
+        Index("idx_metric_name_created", "metric_name", "created_at"),
+    )
+
+
+# =====================================================
+# ETL CHECKPOINT / RESUME
+# =====================================================
+class ETLCheckpoint(Base):
+    __tablename__ = "etl_checkpoint"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+
+    pipeline = Column(String(100), nullable=False, index=True)
+
+    table_name = Column(String(100), nullable=False, index=True)
+
+    file_name = Column(String(255), nullable=False, index=True)
+
+    status = Column(String(20), nullable=False, index=True)
+
+    records_processed = Column(BigInteger, default=0)
+
+    checksum = Column(String(128))
+
+    error_message = Column(Text)
+
+    updated_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    __table_args__ = (
+        Index("idx_checkpoint_file_status", "file_name", "status"),
+    )
+
+
+# =====================================================
+# DEAD LETTER QUEUE
+# =====================================================
+class ETLDeadLetter(Base):
+    __tablename__ = "etl_dead_letter"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+
+    pipeline = Column(String(100), nullable=False, index=True)
+
+    table_name = Column(String(100), nullable=False, index=True)
+
+    file_name = Column(String(255), nullable=False, index=True)
+
+    row_number = Column(BigInteger)
+
+    reason_code = Column(String(100), nullable=False, index=True)
+
+    reason_message = Column(Text)
+
+    raw_payload = Column(Text)
+
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
+# =====================================================
+# DATA QUALITY RULES
+# =====================================================
+class DataQualityRule(Base):
+    __tablename__ = "data_quality_rule"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+
+    table_name = Column(String(100), nullable=False, index=True)
+
+    column_name = Column(String(100), nullable=False)
+
+    rule_type = Column(String(50), nullable=False)
+
+    rule_expression = Column(String(255), nullable=False)
+
+    severity = Column(String(20), default="ERROR")
+
+    enabled = Column(Integer, default=1, index=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    updated_at = Column(DateTime, default=datetime.utcnow)
+
+
+# =====================================================
 # TABELAS AUXILIARES
 # =====================================================
 class CNAE(Base):

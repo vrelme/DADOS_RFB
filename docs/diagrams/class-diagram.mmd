@@ -1,36 +1,57 @@
 classDiagram
     class Settings {
-        DB_HOST
-        DB_PORT
-        DB_USER
         DB_NAME
-        INPUT_DIR
-        LOG_DIR
+        IMPORT_DB_NAME
+        OPERATIONAL_DB_NAME
+        SYNC_STRATEGY
+        LOAD_TARGET
         LOAD_STRATEGY
-        MERGE_STRATEGY
-        MAX_WORKERS
+        RAW_IMPORT_FAST_SCHEMA
+        PROMOTE_RAW_IMPORT_AFTER_LOAD
+        CONTROL_DIFF_MAX_ROWS
+        CONTROL_DIFF_DETAIL_TABLES
         create_dirs()
     }
 
     class ETLOrchestrator {
-        transformer
-        validator
-        deduplicator
-        chunk_size
         run()
-        _run_parallel(tasks)
-        _load_files_to_staging(files, table_name)
+        _run_raw_import_pipeline()
+        _process_rfb_table(table)
+        _discover_table_files(table)
         _execute_pipeline(file_path, staging_model, columns, key, table_name)
     }
 
+    class RFBTableDefinition {
+        table_name
+        patterns
+        columns
+        key_columns
+    }
+
     class BulkRepository {
-        db
         load_file_to_staging(table_name, file_path)
+        load_generic_rfb_file_to_staging(table_name, file_path)
+        _load_data_local_infile(table_name, file_path, columns, set_clause)
         bulk_insert(model, data)
-        merge_empresa()
-        merge_estabelecimento()
-        merge_socio()
-        truncate_table(table_name)
+    }
+
+    class RawImportPromotionRepository {
+        promote()
+        _copy_all_tables_to_final()
+        _compare_or_copy_table(table_name, columns, key_columns)
+        _replace_final_table(conn, table_name)
+        _insert_control(conn, table_name, status, alteration)
+    }
+
+    class ObservabilityRepository {
+        start_run()
+        heartbeat_run()
+        start_phase()
+        finish_phase()
+        start_file_progress()
+        finish_file_progress()
+        checkpoint()
+        metric()
     }
 
     class ETLExecutionRepository {
@@ -38,35 +59,22 @@ classDiagram
         success()
         failed()
         retry()
-        get_failed()
-        get_running()
     }
 
-    class DataTransformer {
-        sanitize(df)
-    }
-
-    class Validator {
-        validate_empresa(df)
-        validate_estabelecimento(df)
-        validate_socio(df)
-    }
-
-    class Deduplicator {
-        drop_duplicates(df, keys)
-    }
-
-    class DatabaseOperationError {
-        operation
-        table_name
-        user_message
-        original_error
+    class DatabaseSessions {
+        SessionLocal
+        OperationalSessionLocal
+        engine
+        operational_engine
     }
 
     ETLOrchestrator --> Settings
+    ETLOrchestrator --> RFBTableDefinition
     ETLOrchestrator --> BulkRepository
+    ETLOrchestrator --> RawImportPromotionRepository
+    ETLOrchestrator --> ObservabilityRepository
     ETLOrchestrator --> ETLExecutionRepository
-    ETLOrchestrator --> DataTransformer
-    ETLOrchestrator --> Validator
-    ETLOrchestrator --> Deduplicator
-    BulkRepository --> DatabaseOperationError
+    ETLOrchestrator --> DatabaseSessions
+    BulkRepository --> Settings
+    RawImportPromotionRepository --> Settings
+    RawImportPromotionRepository --> RFBTableDefinition

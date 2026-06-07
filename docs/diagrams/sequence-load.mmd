@@ -2,24 +2,39 @@ sequenceDiagram
     autonumber
     participant Main as app.main
     participant Orc as ETLOrchestrator
-    participant Worker as Worker process
+    participant Manifest as RFB_TABLES
     participant Repo as BulkRepository
-    participant DB as MySQL/MariaDB
+    participant ImportDB as rfb_import
+    participant OpsDB as dados_rfb_ops
+    participant Promo as RawImportPromotionRepository
+    participant FinalDB as dados_rfb
 
+    Main->>Main: valida ambiente e arquivos
+    Main->>ImportDB: cria tabelas raw sem indices/PK
+    Main->>OpsDB: cria tabelas operacionais etl_*
     Main->>Orc: run()
-    Orc->>Repo: truncate_table("*_staging")
-    Repo->>DB: TRUNCATE TABLE staging
-    Orc->>Worker: process_file_task(file)
-    Worker->>Repo: load_file_to_staging()
-    Repo->>DB: LOAD DATA LOCAL INFILE
-    DB-->>Repo: linhas carregadas
-    Worker-->>Orc: sucesso ou erro
-    Orc->>Repo: merge_*()
-    alt MERGE_STRATEGY=full_refresh
-        Repo->>DB: TRUNCATE tabela final
-        Repo->>DB: INSERT SELECT FROM staging
-    else MERGE_STRATEGY=upsert
-        Repo->>DB: INSERT ... ON DUPLICATE KEY UPDATE
+    Orc->>OpsDB: start etl_run
+    Orc->>Manifest: lista tabelas e padroes de arquivo
+
+    loop para cada tabela RFB
+        Orc->>Repo: load_file_to_staging(table, file)
+        Repo->>OpsDB: start_file_progress / checkpoint STARTED
+        Repo->>ImportDB: LOAD DATA LOCAL INFILE
+        ImportDB-->>Repo: linhas carregadas
+        Repo->>OpsDB: checkpoint SUCCESS / metricas
+        Repo-->>Orc: FIM LEITURA
     end
-    DB-->>Repo: commit
+
+    Orc->>Promo: promote()
+    Promo->>FinalDB: CREATE DATABASE IF NOT EXISTS
+    alt dados_rfb nao existia
+        Promo->>FinalDB: CREATE TABLE LIKE rfb_import + INSERT SELECT
+        Promo->>FinalDB: INSERT controle_alteracao status=copiada
+    else dados_rfb existe
+        Promo->>FinalDB: compara COUNT/CHECKSUM por tabela
+        Promo->>FinalDB: INSERT controle_alteracao sem alteracao/tem alteracao
+        Promo->>FinalDB: substitui tabelas alteradas
+    end
+
+    Orc->>OpsDB: finish etl_run SUCCESS ou FAILED
     Orc-->>Main: pipeline finalizado
