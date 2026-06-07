@@ -107,7 +107,9 @@ Depois disso, as tabelas brutas sao recriadas vazias em `rfb_import` para a prox
 Antes do `rename_swap`, o ETL executa auditoria seletiva dos campos configurados em
 `dados_rfb.controle_campo_monitorado`. Por padrao, `estabelecimento.situacao_cadastral`
 e monitorado para registrar historico de mudanca ativa/inativa em
-`dados_rfb.historico_campo_monitorado`.
+`dados_rfb.historico_campo_monitorado`. Essa auditoria so roda quando a tabela ja existe
+em `dados_rfb`; se a tabela final ainda nao existe, a promocao e feita como copia simples
+por `RENAME TABLE`, sem comparacao linha-a-linha.
 
 A estrategia antiga de copia em lotes continua disponivel com `DB_PROMOTION_STRATEGY=copy`.
 Nesse modo, se `dados_rfb` existir, compara tabela por tabela e registra em `controle_alteracao`:

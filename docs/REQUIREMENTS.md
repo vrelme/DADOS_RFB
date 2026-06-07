@@ -21,6 +21,8 @@ A aplicacao deve carregar os dados publicos de CNPJ da Receita Federal em MySQL/
 - A promocao de `rfb_import` para `dados_rfb` deve evitar copia linha-a-linha em tabelas grandes.
 - A estrategia padrao deve ser `DB_PROMOTION_STRATEGY=rename_swap`.
 - A promocao por `rename_swap` deve mover as tabelas carregadas de `rfb_import` para `dados_rfb` usando `RENAME TABLE`.
+- Quando a tabela final nao existir em `dados_rfb`, o ETL nao deve fazer comparacao/auditoria linha-a-linha; deve promover a tabela nova diretamente.
+- Quando a tabela final ja existir em `dados_rfb`, o ETL deve registrar divergencias configuradas antes de substituir a tabela pelo dado mais recente de `rfb_import`.
 - Depois da promocao, as tabelas brutas devem ser recriadas vazias em `rfb_import` para a proxima execucao.
 - A estrategia antiga de copia em lotes deve permanecer disponivel com `DB_PROMOTION_STRATEGY=copy`.
 - A meta minima e reduzir em pelo menos 80% o tempo da promocao em comparacao com `INSERT INTO ... SELECT`.
@@ -34,7 +36,7 @@ A aplicacao deve carregar os dados publicos de CNPJ da Receita Federal em MySQL/
 - O ETL nao deve comparar todos os campos de todas as tabelas grandes.
 - O ETL deve manter `dados_rfb.estado_campo_monitorado` como estado atual dos campos monitorados.
 - O ETL deve registrar alteracoes em `dados_rfb.historico_campo_monitorado`, com tabela, campo, chave, valor anterior, valor novo, data e hora.
-- A auditoria seletiva deve ocorrer antes do `rename_swap`, comparando o CSV novo em `rfb_import` contra o estado salvo da execucao anterior.
+- A auditoria seletiva deve ocorrer antes do `rename_swap` apenas para tabelas ja existentes no banco final, comparando o CSV novo em `rfb_import` contra o estado salvo da execucao anterior.
 
 ## Requisitos De Tempo E Observabilidade
 

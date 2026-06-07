@@ -32,11 +32,11 @@ flowchart TD
     Ops --> AllOk{"Carga bruta concluida?"}
     AllOk -->|Sim| Promote["Promove rfb_import para dados_rfb"]
     AllOk -->|Nao| Fail["Marca execucao como FAILED"]
-    Promote --> Exists{"dados_rfb existe?"}
-    Exists -->|Nao| CopyAll["Cria banco final e copia tabelas"]
-    Exists -->|Sim| Compare["Compara contagem/checksum por tabela"]
-    Compare --> Control["Registra controle_alteracao"]
-    CopyAll --> End["Finaliza SUCCESS"]
-    Control --> Replace["Substitui tabela alterada no final"]
-    Replace --> End
+    Promote --> Exists{"Tabela existe em dados_rfb?"}
+    Exists -->|Nao| CopyAll["Move tabela nova sem comparacao"]
+    Exists -->|Sim| Compare["Audita campos monitorados"]
+    Compare --> Replace["Troca tabela final pelo dado novo"]
+    CopyAll --> Control["Registra controle_alteracao"]
+    Replace --> Control
+    Control --> End["Finaliza SUCCESS"]
     Fail --> EndFail["Finaliza FAILED"]

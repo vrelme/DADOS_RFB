@@ -117,10 +117,20 @@ class RawImportPromotionRepository:
             
             logger.info(f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] ({index}/{total_tables}) ┌─ INICIO tabela '{table.table_name}'")
             
-            # Etapa 1: Auditoria de campos monitorados
-            logger.info(f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] ({index}/{total_tables}) │  ├─ INICIO auditoria campos monitorados")
-            self._audit_monitored_fields(table.table_name)
-            logger.info(f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] ({index}/{total_tables}) │  └─ FIM auditoria campos monitorados")
+            if existed:
+                # Etapa 1: Auditoria de campos monitorados
+                logger.info(f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] ({index}/{total_tables}) │  ├─ INICIO auditoria campos monitorados")
+                self._audit_monitored_fields(table.table_name)
+                logger.info(f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] ({index}/{total_tables}) │  └─ FIM auditoria campos monitorados")
+            else:
+                logger.info(
+                    f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] ({index}/{total_tables}) │  ├─ "
+                    "Tabela inexistente no banco final; pulando comparacao/auditoria linha-a-linha"
+                )
+                logger.info(
+                    f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] ({index}/{total_tables}) │  └─ "
+                    "Promocao sera copia simples por RENAME TABLE"
+                )
             
             # Etapa 2: Swap da tabela (RENAME)
             logger.info(f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] ({index}/{total_tables}) │  ├─ INICIO swap/rename tabela")
@@ -136,6 +146,8 @@ class RawImportPromotionRepository:
                     f"para {self.final_db}.{table.table_name}. "
                     "Sem copia linha-a-linha para reduzir tempo de promocao."
                 )
+                if not existed:
+                    detail += " Tabela final inexistente; comparacao/auditoria foi ignorada por nao haver base anterior."
                 self._insert_control(conn, table.table_name, status, detail)
             logger.info(f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] ({index}/{total_tables}) │  └─ FIM registro de controle")
             
@@ -705,6 +717,10 @@ class RawImportPromotionRepository:
 
     def _compare_or_copy_table(self, table_name, columns, key_columns):
         if not self._table_exists(self.final_db, table_name):
+            logger.info(
+                f"{self._log_prefix('PROMOCAO')} {table_name}: tabela inexistente em "
+                f"{self.final_db}; copiando de {self.import_db} sem comparacao linha-a-linha"
+            )
             self._replace_final_table(table_name)
             with self.final_engine.begin() as conn:
                 self._insert_control(

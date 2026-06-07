@@ -58,7 +58,8 @@ Ao final de cada tabela promovida, a tabela bruta correspondente e recriada vazi
 Regras da estrategia `rename_swap`:
 
 - valida que as tabelas com arquivos encontrados possuem registros em `rfb_import`;
-- audita campos monitorados antes de mover a tabela;
+- se a tabela ainda nao existe em `dados_rfb`, move a tabela nova sem comparacao/auditoria linha-a-linha;
+- se a tabela ja existe em `dados_rfb`, audita campos monitorados antes de mover a tabela;
 - move cada tabela de `rfb_import` para `dados_rfb`;
 - se a tabela final ja existir, troca a tabela final por uma tabela nova carregada;
 - registra a promocao em `dados_rfb.controle_alteracao`;
@@ -73,7 +74,8 @@ DB_PROMOTION_STRATEGY=copy
 Regras da estrategia `copy`:
 
 - se `dados_rfb` nao existir, cria e copia todas as tabelas;
-- se `dados_rfb` existir, compara contagem e checksum por tabela;
+- se `dados_rfb` existir, copia sem comparacao as tabelas finais inexistentes;
+- se a tabela ja existir em `dados_rfb`, compara contagem e checksum por tabela;
 - registra o resultado em `dados_rfb.controle_alteracao`;
 - substitui a tabela final quando houver divergencia.
 
