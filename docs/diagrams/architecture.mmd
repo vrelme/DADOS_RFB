@@ -1,0 +1,30 @@
+flowchart LR
+    User["Operador"] --> Main["app.main"]
+    Main --> Config["Settings (.env)"]
+    Main --> CreateDB["Cria schemas e tabelas"]
+    Main --> Orchestrator["ETLOrchestrator"]
+
+    subgraph Input["Arquivos RFB descompactados"]
+        EmpresaFiles["*.EMPRECSV"]
+        EstabFiles["*.ESTABELE"]
+        SocioFiles["*.SOCIOCSV"]
+        SimplesFiles["*.SIMPLES.CSV.*"]
+        DomainFiles["*.CNAECSV / MOTICSV / MUNICCSV / NATJUCSV / PAISCSV / QUALSCSV"]
+    end
+
+    Orchestrator --> Manifest["RFB_TABLES manifesto"]
+    Manifest --> Loader["BulkRepository LOAD DATA"]
+    Input --> Loader
+    Loader --> ImportDB[("rfb_import raw tables")]
+
+    Orchestrator --> OpsRepo["ObservabilityRepository / ETLExecutionRepository"]
+    OpsRepo --> OpsDB[("dados_rfb_ops")]
+
+    Orchestrator --> Promotion["RawImportPromotionRepository"]
+    ImportDB --> Promotion
+    Promotion --> FinalDB[("dados_rfb final")]
+    Promotion --> Control["controle_alteracao"]
+    Control --> FinalDB
+
+    Orchestrator --> Logs["Logs operacionais"]
+    Loader --> Logs

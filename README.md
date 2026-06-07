@@ -1,75 +1,158 @@
-# Dados Públicos CNPJ
-- Fonte oficial da Receita Federal do Brasil.
-- Layout dos arquivos, [aqui](https://www.gov.br/receitafederal/dados/cnpj-metadados.pdf).
+# Dados Publicos CNPJ - RFB Loader Enterprise
 
-A Receita Federal do Brasil disponibiliza bases com os dados públicos do cadastro nacional de pessoas jurídicas (CNPJ). 
+Processo ETL para carga dos dados publicos do CNPJ disponibilizados pela Receita Federal do Brasil.
 
-De forma geral, nelas constam as mesmas informações que conseguimos ver no cartão do CNPJ, quando fazemos uma consulta individual, acrescidas de outros dados de Simples Nacional, sócios e etc. Análises muito ricas podem sair desses dados, desde econômicas, mercadológicas até investigações.
+Fonte oficial e layout dos arquivos: [metadados da RFB](https://www.gov.br/receitafederal/dados/cnpj-metadados.pdf).
 
-Nesse repositório consta um processo de ETL para: 
-> 
->**i)** baixar os arquivos; 
+## Objetivo
 
->**ii)** descompactar; 
+A v3 separa a carga bruta dos arquivos, o controle operacional e a base final consultavel:
 
->**iii)** ler;
-
->**iv)** tratar; 
-
->**v)** inserir
-
-Em um banco de dados relacional MariaDB.
-
----------------------
-
-### Infraestrutura necessária:
-- [Python 3.14.0](https://www.python.org/downloads/release/python-3140/)
-- [MySQL Workbench 8.0.44]([https://dev.mysql.com/downloads/workbench/)
-- [Como Instalar WorkBench](https://youtu.be/TMBkdYagi_0?si=otRxmBooxSCRuqW6)
-  
----------------------
-
-### Como usar:
-1. Com o WorkBench instalado, inicie a instância do servidor (pode ser local) e crie o banco de dados conforme o arquivo `banco_de_dados.sql`.
-
-2. Crie um arquivo `.env` no diretório `code`, conforme as variáveis de ambiente do seu ambiente de trabalho (localhost). Utilize como referência o arquivo `.env_template`. Você pode também, por exemplo, renomear o arquivo de `.env_template` para apenas `.env` e então utilizá-lo:
-   - `OUTPUT_FILES_PATH`: diretório de destino para o donwload dos arquivos
-   - `EXTRACTED_FILES_PATH`: diretório de destino para a extração dos arquivos .zip
-   - `DB_USER`: usuário do banco de dados criado pelo arquivo `banco_de_dados.sql`
-   - `DB_PASSWORD`: senha do usuário do BD
-   - `DB_HOST`: host da conexão com o BD 
-   - `DB_PORT`: porta da conexão com o BD 
-   - `DB_NAME`: nome da base de dados na instância (`Dados_RFB` - conforme arquivo `banco_de_dados.sql`)
-
-3. Instale as bibliotecas necessárias, disponíveis em `requirements.txt`:
-```
-pip install -r requirements.txt
+```text
+rfb_import    -> carga bruta dos arquivos CSV da RFB
+dados_rfb     -> base final promovida/consultavel
+dados_rfb_ops -> controle operacional do ETL
 ```
 
-4. Execute o arquivo `ETL_coletar_dados_e_gravar_BD.py` e aguarde a finalização do processo.
-   - Os arquivos são grandes. Dependendo da infraestrutura isso deve levar pelo menos 7 horas para conclusão.
-   - Arquivos de 14/11/2025: `12,8 GB` compactados e `22,9 GB` descompactados.
-    
----------------------
+Esse desenho evita misturar metadados do processo com dados de negocio e reduz bloqueios no banco final durante cargas grandes.
 
-### Tabelas geradas:
-- Para maiores informações, consulte o [layout](https://github.com/vrelme/DADOS_RFB/blob/dev/NOVOLAYOUTDOSDADOSABERTOSDOCNPJ.pdf).
-  - `empresa`: dados cadastrais da empresa em nível de matriz
-  - `estabelecimento`: dados analíticos da empresa por unidade / estabelecimento (telefones, endereço, filial, etc)
-  - `socios`: dados cadastrais dos sócios das empresas
-  - `simples`: dados de MEI e Simples Nacional
-  - `cnae`: código e descrição dos CNAEs
-  - `quals`: tabela de qualificação das pessoas físicas - sócios, responsável e representante legal.  
-  - `natju`: tabela de naturezas jurídicas - código e descrição.
-  - `moti`: tabela de motivos da situação cadastral - código e descrição.
-  - `pais`: tabela de países - código e descrição.
-  - `munic`: tabela de municípios - código e descrição.
+## Arquivos Processados
 
+O ETL identifica os arquivos descompactados em ordem alfabetica por nome e carrega cada grupo na tabela correspondente:
 
-- Pelo volume de dados, as tabelas  `empresa`, `estabelecimento`, `socios` e `simples` possuem índices para a coluna `cnpj_basico`, que é a principal chave de ligação entre elas.
+| Padrao do arquivo | Tabela destino |
+| --- | --- |
+| `*.EMPRECSV` | `empresa` |
+| `*.ESTABELE` | `estabelecimento` |
+| `*.SOCIOCSV` | `socio` |
+| `*.SIMPLES.CSV.*` | `simples` |
+| `*.CNAECSV` | `cnae` |
+| `*.MOTICSV` | `moti` |
+| `*.MUNICCSV` | `munic` |
+| `*.NATJUCSV` | `natju` |
+| `*.PAISCSV` | `pais` |
+| `*.QUALSCSV` | `quals` |
 
-### Modelo de Entidade Relacionamento:
-![alt text](https://github.com/vrelme/DADOS_RFB/blob/dev/Dados_RFB_ERD.png)
+Durante a carga, o log registra o inicio e o fim da leitura de cada arquivo:
 
-### Diagramas UML:
-![alt text](https://github.com/vrelme/DADOS_RFB/blob/dev/Diagramas_UML.png)
+```text
+empresa | INICIO LEITURA | K3241.K03200Y0.D60411.EMPRECSV
+empresa | FIM LEITURA | K3241.K03200Y0.D60411.EMPRECSV | ... registros
+```
+
+## Fluxo Atual
+
+1. Valida diretorios e arquivos de entrada.
+2. Cria/verifica `rfb_import`, `dados_rfb_ops` e, na promocao, `dados_rfb`.
+3. Cria tabelas raw em `rfb_import` sem indices/PK para carga rapida.
+4. Carrega todos os arquivos RFB com `LOAD DATA LOCAL INFILE`.
+5. Registra progresso, metricas, checkpoint e falhas em `dados_rfb_ops`.
+6. Se a carga bruta terminar com sucesso, promove dados de `rfb_import` para `dados_rfb`.
+7. Registra resultado da comparacao em `dados_rfb.controle_alteracao`.
+
+## Tabelas Brutas
+
+No banco `rfb_import` devem existir apenas tabelas de dados brutos:
+
+```text
+empresa
+estabelecimento
+socio
+simples
+cnae
+moti
+munic
+natju
+pais
+quals
+```
+
+## Banco Operacional
+
+O banco `dados_rfb_ops` guarda o controle de execucao:
+
+```text
+etl_execution
+etl_run
+etl_run_phase
+etl_file_progress
+etl_metric
+etl_checkpoint
+etl_dead_letter
+data_quality_rule
+```
+
+## Banco Final
+
+O banco `dados_rfb` contem as tabelas promovidas e a auditoria:
+
+```text
+empresa
+estabelecimento
+socio
+simples
+cnae
+moti
+munic
+natju
+pais
+quals
+controle_alteracao
+```
+
+Por padrao, a promocao usa `DB_PROMOTION_STRATEGY=rename_swap`: as tabelas carregadas em
+`rfb_import` sao movidas para `dados_rfb` com `RENAME TABLE`, evitando copia linha-a-linha.
+Depois disso, as tabelas brutas sao recriadas vazias em `rfb_import` para a proxima carga.
+
+Antes do `rename_swap`, o ETL executa auditoria seletiva dos campos configurados em
+`dados_rfb.controle_campo_monitorado`. Por padrao, `estabelecimento.situacao_cadastral`
+e monitorado para registrar historico de mudanca ativa/inativa em
+`dados_rfb.historico_campo_monitorado`.
+
+A estrategia antiga de copia em lotes continua disponivel com `DB_PROMOTION_STRATEGY=copy`.
+Nesse modo, se `dados_rfb` existir, compara tabela por tabela e registra em `controle_alteracao`:
+
+- `sem alteracao`: assinatura da tabela nao mudou;
+- `tem alteracao`: houve divergencia de contagem/checksum;
+- `copiada`: tabela final nao existia e foi copiada.
+
+Por performance, a auditoria detalhada campo-a-campo fica limitada por configuracao e por padrao roda apenas em tabelas pequenas de dominio.
+
+## Variaveis Principais
+
+```env
+DB_NAME=dados_rfb
+IMPORT_DB_NAME=rfb_import
+OPERATIONAL_DB_NAME=dados_rfb_ops
+
+SYNC_STRATEGY=raw_import
+LOAD_TARGET=final
+LOAD_STRATEGY=load_data
+
+IMPORT_DB_PER_RUN=False
+RAW_IMPORT_RESET_TABLES=True
+RAW_IMPORT_FAST_SCHEMA=True
+PROMOTE_RAW_IMPORT_AFTER_LOAD=True
+DB_PROMOTION_STRATEGY=rename_swap
+MONITORED_FIELDS_BOOTSTRAP_DEFAULTS=True
+CONTROL_DIFF_MAX_ROWS=1000
+CONTROL_DIFF_DETAIL_TABLES=cnae,moti,munic,natju,pais,quals
+DB_LOCAL_INFILE=True
+```
+
+Para `LOAD DATA LOCAL INFILE`, o MySQL/MariaDB tambem precisa estar com `local_infile=ON` no servidor.
+
+## Execucao
+
+```powershell
+cd "F:\Repositorio\15_Git\RFB Loader Enterprise"
+.\.venv\Scripts\Activate.ps1
+python -m app.main
+```
+
+## Documentacao
+
+- [Documentacao da aplicacao](docs/APPLICATION_DOCUMENTATION.md)
+- [Requisitos](docs/REQUIREMENTS.md)
+- [Roadmap v3](docs/V3_FEATURE_ROADMAP.md)
+- [Diagramas Mermaid](docs/diagrams)

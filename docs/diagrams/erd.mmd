@@ -1,0 +1,114 @@
+erDiagram
+    EMPRESA {
+        string cnpj_basico
+        string razao_social
+        string natureza_juridica
+        string qualificacao_responsavel
+        string capital_social
+        string porte_empresa
+        string ente_federativo
+    }
+
+    ESTABELECIMENTO {
+        string cnpj_basico
+        string cnpj_ordem
+        string cnpj_dv
+        string nome_fantasia
+        string situacao_cadastral
+        string data_inicio_atividade
+        string cnae_fiscal_principal
+        string uf
+        string municipio
+        string email
+    }
+
+    SOCIO {
+        string cnpj_basico
+        string identificador_socio
+        string nome_socio
+        string cpf_cnpj_socio
+        string qualificacao_socio
+        string data_entrada_sociedade
+    }
+
+    SIMPLES {
+        string cnpj_basico
+        string opcao_simples
+        string data_opcao_simples
+        string data_exclusao_simples
+        string opcao_mei
+        string data_opcao_mei
+        string data_exclusao_mei
+    }
+
+    CNAE {
+        string codigo
+        string descricao
+    }
+
+    MOTI {
+        string codigo
+        string descricao
+    }
+
+    MUNIC {
+        string codigo
+        string descricao
+    }
+
+    NATJU {
+        string codigo
+        string descricao
+    }
+
+    PAIS {
+        string codigo
+        string descricao
+    }
+
+    QUALS {
+        string codigo
+        string descricao
+    }
+
+    CONTROLE_ALTERACAO {
+        bigint id PK
+        string tabela
+        string status
+        text alteracao
+        date data_movimento
+        time hora_movimento
+        datetime created_at
+    }
+
+    ETL_RUN {
+        bigint id PK
+        string status
+        string current_phase
+        string current_table
+        string current_file
+        int total_files
+        int completed_files
+        float progress_percent
+    }
+
+    ETL_FILE_PROGRESS {
+        bigint id PK
+        bigint run_id
+        string table_name
+        string file_name
+        string status
+        bigint records_processed
+    }
+
+    EMPRESA ||--o{ ESTABELECIMENTO : cnpj_basico
+    EMPRESA ||--o{ SOCIO : cnpj_basico
+    EMPRESA ||--o| SIMPLES : cnpj_basico
+    ESTABELECIMENTO }o--|| CNAE : cnae_fiscal_principal
+    ESTABELECIMENTO }o--|| MUNIC : municipio
+    ESTABELECIMENTO }o--|| PAIS : pais
+    EMPRESA }o--|| NATJU : natureza_juridica
+    SOCIO }o--|| QUALS : qualificacao_socio
+    ESTABELECIMENTO }o--|| MOTI : motivo_situacao_cadastral
+    ETL_RUN ||--o{ ETL_FILE_PROGRESS : run_id
+    CONTROLE_ALTERACAO }o--|| EMPRESA : tabela

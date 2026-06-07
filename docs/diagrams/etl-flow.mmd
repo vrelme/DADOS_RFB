@@ -1,0 +1,42 @@
+flowchart TD
+    Start["Inicio: python -m app.main"] --> Env["Carrega .env e valida diretorios"]
+    Env --> Files["Descobre arquivos em INPUT_DIR/EXTRACT_DIR"]
+    Files --> Schemas["Cria rfb_import e dados_rfb_ops"]
+    Schemas --> RawTables["Cria tabelas raw sem indices/PK"]
+    RawTables --> Manifest["Itera RFB_TABLES em ordem"]
+
+    Manifest --> Empresa["empresa: *.EMPRECSV"]
+    Manifest --> Estab["estabelecimento: *.ESTABELE"]
+    Manifest --> Socio["socio: *.SOCIOCSV"]
+    Manifest --> Simples["simples: *.SIMPLES.CSV.*"]
+    Manifest --> Cnae["cnae: *.CNAECSV"]
+    Manifest --> Moti["moti: *.MOTICSV"]
+    Manifest --> Munic["munic: *.MUNICCSV"]
+    Manifest --> Natju["natju: *.NATJUCSV"]
+    Manifest --> Pais["pais: *.PAISCSV"]
+    Manifest --> Quals["quals: *.QUALSCSV"]
+
+    Empresa --> Load["LOAD DATA LOCAL INFILE"]
+    Estab --> Load
+    Socio --> Load
+    Simples --> Load
+    Cnae --> Load
+    Moti --> Load
+    Munic --> Load
+    Natju --> Load
+    Pais --> Load
+    Quals --> Load
+
+    Load --> LogFile["Log INICIO/FIM por arquivo"]
+    Load --> Ops["Atualiza progresso, metricas e checkpoint"]
+    Ops --> AllOk{"Carga bruta concluida?"}
+    AllOk -->|Sim| Promote["Promove rfb_import para dados_rfb"]
+    AllOk -->|Nao| Fail["Marca execucao como FAILED"]
+    Promote --> Exists{"dados_rfb existe?"}
+    Exists -->|Nao| CopyAll["Cria banco final e copia tabelas"]
+    Exists -->|Sim| Compare["Compara contagem/checksum por tabela"]
+    Compare --> Control["Registra controle_alteracao"]
+    CopyAll --> End["Finaliza SUCCESS"]
+    Control --> Replace["Substitui tabela alterada no final"]
+    Replace --> End
+    Fail --> EndFail["Finaliza FAILED"]
