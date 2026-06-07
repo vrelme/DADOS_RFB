@@ -104,6 +104,13 @@ Por padrao, a promocao usa `DB_PROMOTION_STRATEGY=rename_swap`: as tabelas carre
 `rfb_import` sao movidas para `dados_rfb` com `RENAME TABLE`, evitando copia linha-a-linha.
 Depois disso, as tabelas brutas sao recriadas vazias em `rfb_import` para a proxima carga.
 
+Nota operacional: quando `rename_swap` encontra uma tabela final ja existente, o ETL
+executa um RENAME duplo (a tabela final atual e renomeada para `tabela__previous`,
+depois a tabela carregada em `rfb_import` e movida para o nome final). O backup
+`tabela__previous` e descartado em seguida com `DROP TABLE IF EXISTS` e, por padrao,
+uma tabela vazia e recriada em `rfb_import` para a proxima execucao. Isso garante
+promocoes rapidas sem perder a disponibilidade do schema de import.
+
 Antes do `rename_swap`, o ETL executa auditoria seletiva dos campos configurados em
 `dados_rfb.controle_campo_monitorado`. Por padrao, `estabelecimento.situacao_cadastral`
 e monitorado para registrar historico de mudanca ativa/inativa em

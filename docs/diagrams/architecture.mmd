@@ -22,8 +22,11 @@ flowchart LR
 
     Orchestrator --> Promotion["RawImportPromotionRepository"]
     ImportDB --> Promotion
-    Promotion --> FinalDB[("dados_rfb final")]
-    Promotion --> Control["controle_alteracao"]
+    Promotion --> RenameSwap["rename_swap (RENAME TABLE)"]
+    RenameSwap --> FinalDB[("dados_rfb final")]
+    RenameSwap --> Control["controle_alteracao"]
+    %% Detalhe: quando a tabela final existir, o fluxo realiza RENAME duplo (final -> final__previous, import -> final) e depois descarta o backup; apos o swap a tabela vazia e recriada em rfb_import
+    Control --> FinalDB
     Control --> FinalDB
 
     Orchestrator --> Logs["Logs operacionais"]

@@ -21,7 +21,11 @@ A aplicacao deve carregar os dados publicos de CNPJ da Receita Federal em MySQL/
 - A promocao de `rfb_import` para `dados_rfb` deve evitar copia linha-a-linha em tabelas grandes.
 - A estrategia padrao deve ser `DB_PROMOTION_STRATEGY=rename_swap`.
 - A promocao por `rename_swap` deve mover as tabelas carregadas de `rfb_import` para `dados_rfb` usando `RENAME TABLE`.
-- Depois da promocao, as tabelas brutas devem ser recriadas vazias em `rfb_import` para a proxima execucao.
+ - A promocao por `rename_swap` deve mover as tabelas carregadas de `rfb_import` para `dados_rfb` usando `RENAME TABLE`.
+	 - Quando a tabela final ja existir, o ETL executa um RENAME duplo: renomeia a tabela final atual para um nome de backup (ex.: `tabela__previous`) e em seguida renomeia a tabela carregada em `rfb_import` para o nome final. O backup entao e descartado (DROP) apos a troca.
+	 - Quando a tabela final nao existir, e realizado um RENAME simples do import para o final.
+ - Depois da promocao, as tabelas brutas sao recriadas vazias em `rfb_import` para a proxima execucao. Ou seja, os dados sao removidos do schema `rfb_import` pelo swap, mas a estrutura e recriada (NAO e executado `DROP TABLE` por padrao), deixando o schema pronto para o proximo carregamento.
+ - Antes do `rename_swap`, o ETL executa auditoria seletiva dos campos monitorados e, apos a promocao, registra um evento em `dados_rfb.controle_alteracao` com o status da promocao (por exemplo `copiada` ou `promovida`).
 - A estrategia antiga de copia em lotes deve permanecer disponivel com `DB_PROMOTION_STRATEGY=copy`.
 - A meta minima e reduzir em pelo menos 80% o tempo da promocao em comparacao com `INSERT INTO ... SELECT`.
 
