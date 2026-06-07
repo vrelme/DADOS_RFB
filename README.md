@@ -123,6 +123,7 @@ Por performance, a auditoria detalhada campo-a-campo fica limitada por configura
 ## Variaveis Principais
 
 ```env
+APP_VERSION=V3.0.0
 DB_NAME=dados_rfb
 IMPORT_DB_NAME=rfb_import
 OPERATIONAL_DB_NAME=dados_rfb_ops
@@ -141,6 +142,9 @@ CONTROL_DIFF_MAX_ROWS=1000
 CONTROL_DIFF_DETAIL_TABLES=cnae,moti,munic,natju,pais,quals
 DB_LOCAL_INFILE=True
 ```
+
+`APP_VERSION` e exibida no cabecalho inicial do log para facilitar auditoria da versao
+executada em producao.
 
 Para `LOAD DATA LOCAL INFILE`, o MySQL/MariaDB tambem precisa estar com `local_infile=ON` no servidor.
 

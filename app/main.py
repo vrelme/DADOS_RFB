@@ -38,6 +38,7 @@ from app.etl.rfb_manifest import RFB_TABLES, raw_import_create_table_sql
 def banner(logger):
     logger.info("=" * 70)
     logger.info(Settings.APP_NAME)
+    logger.info(f"Versão da aplicação: {Settings.APP_VERSION}")
     logger.info("Inicialização ambiente de produção")
     logger.info("=" * 70)
 

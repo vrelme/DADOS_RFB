@@ -22,6 +22,8 @@ class Settings:
     # =====================================================
     APP_NAME = os.getenv("APP_NAME", "RFB Loader Enterprise")
 
+    APP_VERSION = os.getenv("APP_VERSION", "V3.0.0")
+
     ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 
     DEBUG = os.getenv("DEBUG", "False").lower() == "true"

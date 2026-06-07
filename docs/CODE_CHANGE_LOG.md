@@ -1,5 +1,24 @@
 # Log De Alteracoes No Codigo
 
+## 2026-06-07 - Versao da aplicacao no cabecalho do log
+
+### Contexto
+
+O cabecalho inicial do log mostrava o nome da aplicacao e o ambiente de producao, mas nao
+identificava qual versao estava em execucao.
+
+### O Que Mudou
+
+- Em `app/config.py`, foi adicionada a configuracao `APP_VERSION`, lida do `.env`.
+- Em `app/main.py`, o `banner()` agora registra `Versão da aplicação: <valor>`.
+- Em `.env.example`, `README.md` e `docs/APPLICATION_DOCUMENTATION.md`, a variavel
+  `APP_VERSION=V3.0.0` foi documentada.
+
+### Para O Analista Junior
+
+Quando precisar trocar a versao exibida no log, ajuste apenas a linha `APP_VERSION` no `.env`.
+Na proxima execucao, o cabecalho inicial do log passara a mostrar a nova versao.
+
 ## 2026-06-07 - Promocao de tabelas novas sem comparacao linha-a-linha
 
 ### Contexto

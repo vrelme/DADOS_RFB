@@ -210,11 +210,15 @@ python -m app.main
 Configuração recomendada para carga completa:
 
 ```env
+APP_VERSION=V3.0.0
 LOAD_STRATEGY=load_data
 MERGE_STRATEGY=full_refresh
 DB_LOCAL_INFILE=True
 MAX_WORKERS=4
 ```
+
+`APP_VERSION` deve ser mantida no `.env` pelo analista responsavel pela implantacao.
+Na inicializacao, o valor e registrado no cabecalho do log junto com o nome da aplicacao.
 
 Para o `LOAD DATA LOCAL INFILE` funcionar, o MySQL/MariaDB precisa estar com `local_infile` habilitado no cliente e no servidor:
 
