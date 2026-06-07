@@ -154,7 +154,7 @@ class RawImportPromotionRepository:
 
         with self.final_engine.begin() as conn:
             # Etapa 1: Criar backup
-                logger.info(f"{self._log_prefix('SWAP')} {table_name}: ├─ INICIO criar backup tabela anterior")
+            logger.info(f"{self._log_prefix('SWAP')} {table_name}: ├─ INICIO criar backup tabela anterior")
             conn.execute(text(f"DROP TABLE IF EXISTS {backup_table}"))
             logger.debug(f"{self._log_prefix('SWAP')} {table_name}: │  └─ DROP IF EXISTS executado")
             
