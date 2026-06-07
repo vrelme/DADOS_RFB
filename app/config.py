@@ -198,6 +198,10 @@ class Settings:
         os.getenv("MONITORED_FIELDS_BOOTSTRAP_DEFAULTS", "True").lower() == "true"
     )
 
+    MONITORED_FIELD_AUDIT_ENABLED = (
+        os.getenv("MONITORED_FIELD_AUDIT_ENABLED", "True").lower() == "true"
+    )
+
     MONITORED_FIELD_BATCH_SIZE = int(
         os.getenv("MONITORED_FIELD_BATCH_SIZE", DB_PROMOTION_BATCH_SIZE)
     )

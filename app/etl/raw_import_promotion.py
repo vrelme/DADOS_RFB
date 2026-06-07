@@ -214,6 +214,13 @@ class RawImportPromotionRepository:
         logger.debug(f"{self._log_prefix('RECREATE')} {table_name}: FIM recriar schema vazio")
 
     def _audit_monitored_fields(self, table_name):
+        if not Settings.MONITORED_FIELD_AUDIT_ENABLED:
+            logger.info(
+                f"{self._log_prefix('MONITORAMENTO')} {table_name}: "
+                "auditoria de campos monitorados desabilitada por configuracao"
+            )
+            return
+
         fields = self._monitored_fields_for_table(table_name)
         if not fields:
             logger.info(f"{self._log_prefix('MONITORAMENTO')} {table_name}: nenhum campo monitorado")

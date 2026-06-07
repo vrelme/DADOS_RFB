@@ -138,6 +138,7 @@ RAW_IMPORT_FAST_SCHEMA=True
 PROMOTE_RAW_IMPORT_AFTER_LOAD=True
 DB_PROMOTION_STRATEGY=rename_swap
 MONITORED_FIELDS_BOOTSTRAP_DEFAULTS=True
+MONITORED_FIELD_AUDIT_ENABLED=True
 CONTROL_DIFF_MAX_ROWS=1000
 CONTROL_DIFF_DETAIL_TABLES=cnae,moti,munic,natju,pais,quals
 DB_LOCAL_INFILE=True
@@ -145,6 +146,10 @@ DB_LOCAL_INFILE=True
 
 `APP_VERSION` e exibida no cabecalho inicial do log para facilitar auditoria da versao
 executada em producao.
+
+Para rodadas de performance em que o historico de campos monitorados pode ser adiado,
+defina `MONITORED_FIELD_AUDIT_ENABLED=False`. Isso evita a auditoria pesada de
+`estabelecimento.situacao_cadastral` durante a promocao.
 
 Para `LOAD DATA LOCAL INFILE`, o MySQL/MariaDB tambem precisa estar com `local_infile=ON` no servidor.
 

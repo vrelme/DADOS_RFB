@@ -1,5 +1,32 @@
 # Log De Alteracoes No Codigo
 
+## 2026-06-07 - Controle de performance para auditoria de campos monitorados
+
+### Contexto
+
+Durante cargas grandes, principalmente em `estabelecimento`, a auditoria de campos
+monitorados pode gerar consultas pesadas na etapa de promocao porque compara o dado novo
+contra o estado anterior.
+
+### O Que Mudou
+
+- Em `app/config.py`, foi adicionada a configuracao `MONITORED_FIELD_AUDIT_ENABLED`.
+- Em `app/etl/raw_import_promotion.py`, `_audit_monitored_fields()` agora respeita essa
+  configuracao e registra no log quando a auditoria estiver desabilitada.
+- `.env.example`, `README.md` e `docs/APPLICATION_DOCUMENTATION.md` documentam o uso da
+  opcao para rodadas de performance.
+
+### Para O Analista Junior
+
+Se o banco estiver sobrecarregado e a prioridade for concluir a carga, configure no `.env`:
+
+```env
+MONITORED_FIELD_AUDIT_ENABLED=False
+```
+
+Com isso, o programa continua promovendo `rfb_import` para `dados_rfb`, mas nao registra
+historico dos campos monitorados nessa execucao.
+
 ## 2026-06-07 - Versao da aplicacao no cabecalho do log
 
 ### Contexto

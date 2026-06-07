@@ -220,6 +220,11 @@ MAX_WORKERS=4
 `APP_VERSION` deve ser mantida no `.env` pelo analista responsavel pela implantacao.
 Na inicializacao, o valor e registrado no cabecalho do log junto com o nome da aplicacao.
 
+Para reduzir carga no MariaDB em janelas de importacao grandes, `MONITORED_FIELD_AUDIT_ENABLED=False`
+desliga temporariamente a auditoria dos campos configurados em `controle_campo_monitorado`.
+Use essa opcao quando a prioridade for concluir a carga/promocao e o historico detalhado
+puder ser processado em outro momento.
+
 Para o `LOAD DATA LOCAL INFILE` funcionar, o MySQL/MariaDB precisa estar com `local_infile` habilitado no cliente e no servidor:
 
 ```sql
