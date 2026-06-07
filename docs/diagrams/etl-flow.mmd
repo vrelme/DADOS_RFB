@@ -37,6 +37,10 @@ flowchart TD
     Exists -->|Sim| Compare["Compara contagem/checksum por tabela"]
     Compare --> Control["Registra controle_alteracao"]
     CopyAll --> End["Finaliza SUCCESS"]
-    Control --> Replace["Substitui tabela alterada no final"]
+    Control --> RenameSwap["rename_swap: RENAME duplo (final->final__previous, import->final)"]
+    RenameSwap --> DropBackup["DROP TABLE IF EXISTS final__previous"]
+    RenameSwap --> RecreateImport["Recria tabela vazia em rfb_import"]
+    DropBackup --> Replace["Substitui tabela alterada no final"]
+    RecreateImport --> Replace
     Replace --> End
     Fail --> EndFail["Finaliza FAILED"]

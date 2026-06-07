@@ -63,6 +63,9 @@ Regras da estrategia `rename_swap`:
 - se a tabela final ja existir, troca a tabela final por uma tabela nova carregada;
 - registra a promocao em `dados_rfb.controle_alteracao`;
 - registra tempo por tabela e tempo total de promocao.
+ - quando a tabela final ja existir, o ETL executa um RENAME duplo (swap com backup) — renomeando a tabela final existente para `tabela__previous` e em seguida movendo a tabela carregada de `rfb_import` para o nome final; o backup `tabela__previous` e descartado posteriormente com `DROP TABLE IF EXISTS`.
+ - apos o RENAME (simples ou duplo), a implementacao recria uma tabela vazia no schema `rfb_import` usando o DDL gerado por `raw_import_create_table_sql(...)`. Isto garante que o schema de import exista para a proxima execucao; nao e executado `DROP TABLE` por padrao no final do processo.
+ - apos cada tabela promovida, o ETL insere um registro em `dados_rfb.controle_alteracao` com o `status` (ex.: `promovida`, `copiada`) e detalhes do procedimento de promocao.
 
 A estrategia antiga continua disponivel com:
 
