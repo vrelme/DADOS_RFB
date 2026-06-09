@@ -2,11 +2,13 @@
 
 ## Objetivo Operacional
 
-A aplicacao deve carregar os dados publicos de CNPJ da Receita Federal em MySQL/MariaDB com separacao entre:
+A aplicacao deve carregar os dados publicos de CNPJ da Receita Federal em MariaDB com separacao entre:
 
 - `rfb_import`: banco temporario de carga bruta dos arquivos CSV.
 - `dados_rfb`: banco final consultavel.
-- `rfb_ops`: banco operacional de execucao, metricas e checkpoints.
+- `dados_rfb_ops`: banco operacional de execucao, metricas e checkpoints.
+
+O cliente SQL recomendado para administracao e acompanhamento operacional e o DBeaver 26.1.0, configurado com conexao do tipo MariaDB.
 
 ## Requisitos De Carga
 

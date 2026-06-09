@@ -1,6 +1,6 @@
 # Dados Publicos CNPJ - RFB Loader Enterprise
 
-Processo ETL para carga dos dados publicos do CNPJ disponibilizados pela Receita Federal do Brasil.
+Processo ETL para carga dos dados publicos do CNPJ disponibilizados pela Receita Federal do Brasil em MariaDB.
 
 Fonte oficial e layout dos arquivos: [metadados da RFB](https://www.gov.br/receitafederal/dados/cnpj-metadados.pdf).
 
@@ -15,6 +15,27 @@ dados_rfb_ops -> controle operacional do ETL
 ```
 
 Esse desenho evita misturar metadados do processo com dados de negocio e reduz bloqueios no banco final durante cargas grandes.
+
+## Banco E Cliente SQL
+
+Esta versao esta padronizada para:
+
+- MariaDB Server, usando o driver Python `mysql+pymysql`;
+- DBeaver 26.1.0 como cliente SQL recomendado para administracao, consultas e acompanhamento operacional.
+
+Configuracao recomendada de conexao no DBeaver 26.1.0:
+
+```text
+Tipo de conexao: MariaDB
+Host: localhost
+Porta: 3306
+Banco inicial: dados_rfb
+Usuario: usuario configurado em DB_USER
+Senha: senha configurada em DB_PASSWORD
+```
+
+Os bancos usados pela aplicacao sao criados/verificados pelo ETL conforme as variaveis `DB_NAME`,
+`IMPORT_DB_NAME` e `OPERATIONAL_DB_NAME`.
 
 ## Arquivos Processados
 
@@ -151,7 +172,14 @@ Para rodadas de performance em que o historico de campos monitorados pode ser ad
 defina `MONITORED_FIELD_AUDIT_ENABLED=False`. Isso evita a auditoria pesada de
 `estabelecimento.situacao_cadastral` durante a promocao.
 
-Para `LOAD DATA LOCAL INFILE`, o MySQL/MariaDB tambem precisa estar com `local_infile=ON` no servidor.
+Para `LOAD DATA LOCAL INFILE`, o MariaDB tambem precisa estar com `local_infile=ON` no servidor.
+
+Validacao recomendada no DBeaver 26.1.0:
+
+```sql
+SHOW GLOBAL VARIABLES LIKE 'local_infile';
+SET GLOBAL local_infile = 1;
+```
 
 ## Execucao
 
