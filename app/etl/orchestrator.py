@@ -339,11 +339,11 @@ class ETLOrchestrator:
         if Settings.PROMOTE_RAW_IMPORT_AFTER_LOAD:
             phase = self._start_phase("PROMOTE_RAW_IMPORT", table_name="controle_alteracao")
             try:
-                self.logger.info("-" * 80)
+                self.logger.info("-" * 107)
                 self.logger.info(
                     f"PROMOVENDO {Settings.ACTIVE_DB_NAME} -> {Settings.DB_NAME}"
                 )
-                self.logger.info("-" * 80)
+                self.logger.info("-" * 107)
                 self._promotion_timings = RawImportPromotionRepository().promote()
             finally:
                 self._finish_phase(phase)
@@ -354,9 +354,9 @@ class ETLOrchestrator:
 
     def _process_rfb_table(self, table):
         table_started_at = time.time()
-        self.logger.info("-" * 80)
+        self.logger.info("-" * 107)
         self.logger.info(f"PROCESSANDO {table.table_name.upper()}")
-        self.logger.info("-" * 80)
+        self.logger.info("-" * 107)
 
         phase = self._start_phase(
             f"LOAD_{table.table_name.upper()}",
@@ -484,7 +484,7 @@ class ETLOrchestrator:
             completed += len(wave)
 
         elapsed = round(time.time() - start_parallel, 2)
-        self.logger.info("-" * 80)
+        self.logger.info("-" * 107)
         self.logger.info(
             f"PARALELISMO ADAPTATIVO FINALIZADO   | "
             f"arquivos={completed} | {elapsed}s"
@@ -766,11 +766,11 @@ class ETLOrchestrator:
     # =====================================================
     def _process_estabelecimento(self):
 
-        self.logger.info("-" * 80)
+        self.logger.info("-" * 107)
         self.logger.info(
             "PROCESSANDO ESTABELECIMENTO"
         )
-        self.logger.info("-" * 80)
+        self.logger.info("-" * 107)
 
         phase = self._start_phase("LOAD_ESTABELECIMENTO", table_name="estabelecimento")
 
@@ -873,11 +873,11 @@ class ETLOrchestrator:
     # =====================================================
     def _process_socio(self):
 
-        self.logger.info("-" * 80)
+        self.logger.info("-" * 107)
         self.logger.info(
             "PROCESSANDO SOCIO"
         )
-        self.logger.info("-" * 80)
+        self.logger.info("-" * 107)
 
         phase = self._start_phase("LOAD_SOCIO", table_name="socio")
 
