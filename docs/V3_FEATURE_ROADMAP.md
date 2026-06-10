@@ -4,10 +4,10 @@
 
 A v3 deve separar ingestao bruta e tratamento:
 
-- `dados_rfb_import`: carga bruta dos CSVs, sem bloquear o banco principal.
+- `rfb_import`: carga bruta dos CSVs, sem bloquear o banco principal.
 - `dados_rfb`: base oficial/tratada, atualizada por etapa posterior de qualidade/sincronizacao.
 
-Esse desenho evita `TRUNCATE` em tabelas finais em uso e reduz lock contention no MySQL.
+Esse desenho evita `TRUNCATE` em tabelas finais em uso e reduz lock contention no MariaDB.
 
 ## Entregue Nesta Fundacao
 
@@ -182,7 +182,7 @@ Benefícios:
 - maior throughput durante `LOAD DATA` e validação;
 - logs mais previsíveis em execução paralela.
 
-### Particionamento MySQL
+### Particionamento MariaDB
 
 Objetivo: preparar tabelas gigantes para consultas e manutenção em escala.
 
@@ -196,7 +196,7 @@ Estratégias candidatas:
 Entregáveis:
 
 - scripts SQL versionados em `database/partitions/`;
-- avaliação de impacto em primary keys e unique keys do MySQL;
+- avaliação de impacto em primary keys e unique keys do MariaDB;
 - documentação de manutenção de partições;
 - testes de carga comparando tabela particionada e não particionada.
 
@@ -285,7 +285,7 @@ Objetivo: estabilizar a v3 antes de evoluir integrações enterprise.
 Categorias:
 
 - unitários: validação, regras, DLQ, checkpoints;
-- integração: MySQL local/test container, criação de schema, carga pequena;
+- integração: MariaDB local/test container, criação de schema, carga pequena;
 - carga: arquivos sintéticos grandes;
 - concorrência: paralelismo, retry, lock handling;
 - regressão: garantir que `raw_import` não toque o banco principal.
@@ -341,7 +341,7 @@ Implementar modo `STREAMING_LOADER=True` para monitorar pasta continuamente e pr
 Criar DAG separada para:
 
 1. baixar/extrair arquivos;
-2. carregar `dados_rfb_import`;
+2. carregar `rfb_import`;
 3. validar qualidade;
 4. sincronizar `dados_rfb`;
 5. emitir metricas finais.
@@ -368,9 +368,9 @@ Adicionar spans para:
 7. API Operacional ETL.
 8. Web Admin ETL.
 9. Arquivamento automático.
-10. Particionamento MySQL validado por benchmark.
+10. Particionamento MariaDB validado por benchmark.
 11. Airflow Integration.
 12. OpenTelemetry Tracing.
 13. CI/CD completo com Docker e deploy.
 
-Critério de fechamento da v3: carga bruta em `dados_rfb_import`, validação com DLQ, checkpoint/retry, métricas consultáveis no Grafana e testes automatizados mínimos passando.
+Critério de fechamento da v3: carga bruta em `rfb_import`, validação com DLQ, checkpoint/retry, métricas consultáveis no Grafana e testes automatizados mínimos passando.

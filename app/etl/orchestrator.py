@@ -176,9 +176,9 @@ class ETLOrchestrator:
     def run(self):
         self._pipeline_started_at = time.time()
 
-        self.logger.info("=" * 80)
+        self.logger.info("=" * 107)
         self.logger.info("RFB LOADER ENTERPRISE")
-        self.logger.info("=" * 80)
+        self.logger.info("=" * 107)
 
         Settings.create_dirs()
 
@@ -216,9 +216,9 @@ class ETLOrchestrator:
             self._finish_run("SUCCESS")
             self._log_timing_summary()
 
-            self.logger.info("=" * 80)
+            self.logger.info("=" * 107)
             self.logger.info("PIPELINE FINALIZADO")
-            self.logger.info("=" * 80)
+            self.logger.info("=" * 107)
 
         except Exception as exc:
             self._finish_run("FAILED", str(exc))
@@ -388,7 +388,7 @@ class ETLOrchestrator:
             elapsed = time.time() - table_started_at
             self._table_load_timings[table.table_name] = elapsed
             self.logger.info(
-                f"TEMPO TABELA | carga {table.table_name} | {format_duration(elapsed)}"
+                f"TEMPO TABELA        | carga {table.table_name} | {format_duration(elapsed)}"
             )
             self._finish_phase(phase)
 
@@ -405,31 +405,35 @@ class ETLOrchestrator:
             else 0
         )
 
-        self.logger.info("=" * 80)
+        self.logger.info("=" * 107)
         self.logger.info("RESUMO DE TEMPOS")
-        self.logger.info("=" * 80)
+        self.logger.info("=" * 107)
         for table_name, elapsed in self._table_load_timings.items():
             self.logger.info(
-                f"TEMPO | carga tabela {table_name}: {format_duration(elapsed)}"
+                f"TEMPO               | carga tabela {table_name}: {format_duration(elapsed)}"
             )
         if self._table_load_timings:
+            self.logger.info("-" * 107)
             self.logger.info(
-                f"TEMPO | carga total: {format_duration(load_total)}"
+                f"TEMPO              | carga total: {format_duration(load_total)}"
             )
+            self.logger.info("-" * 107)
 
         if self._promotion_timings:
             for table_name, elapsed in self._promotion_timings.get("tables", {}).items():
                 self.logger.info(
-                    f"TEMPO | promocao tabela {table_name}: {format_duration(elapsed)}"
+                    f"TEMPO              | promocao tabela {table_name}: {format_duration(elapsed)}"
                 )
+            self.logger.info("-" * 107)
             self.logger.info(
-                f"TEMPO | promocao total: {format_duration(promotion_total)}"
+                f"TEMPO              | promocao total: {format_duration(promotion_total)}"
             )
-
+            self.logger.info("-" * 107)
+        self.logger.info("=" * 107)
         self.logger.info(
             f"TEMPO | total pipeline: {format_duration(total_elapsed)}"
         )
-        self.logger.info("=" * 80)
+        self.logger.info("=" * 107)
 
     def _discover_table_files(self, table):
         files = []
@@ -677,11 +681,11 @@ class ETLOrchestrator:
     # =====================================================
     def _process_empresa(self):
 
-        self.logger.info("-" * 80)
+        self.logger.info("-" * 107)
         self.logger.info(
             "PROCESSANDO EMPRESA"
         )
-        self.logger.info("-" * 80)
+        self.logger.info("-" * 107)
 
         phase = self._start_phase("LOAD_EMPRESA", table_name="empresa")
 
@@ -979,11 +983,11 @@ class ETLOrchestrator:
 
         try:
 
-            self.logger.info("-" * 80)
+            self.logger.info("-" * 107)
             self.logger.info(
                 f"PROCESSANDO: {file_path.name}"
             )
-            self.logger.info("-" * 80)
+            self.logger.info("-" * 107)
 
             already_successful_in_current_run = (
                 self.run_id
@@ -1101,7 +1105,7 @@ class ETLOrchestrator:
                         records_processed=total,
                     )
                 self.logger.info(
-                    f"FINALIZADO   | "
+                    f"FINALIZADO          | "
                     f"{file_path.name} | "
                     f"{total} registros | "
                     f"{total_time}s"
@@ -1228,7 +1232,7 @@ class ETLOrchestrator:
             )
 
             self.logger.info(
-                f"FINALIZADO   | "
+                f"FINALIZADO          | "
                 f"{file_path.name} | "
                 f"{total} registros | "
                 f"{total_time}s"
