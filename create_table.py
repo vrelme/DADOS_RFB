@@ -50,15 +50,15 @@ def show_tables():
 
     tables = inspector.get_table_names()
 
-    logger.info("=" * 70)
+    logger.info("=" * 107)
     logger.info("TABELAS ENCONTRADAS")
-    logger.info("=" * 70)
+    logger.info("=" * 107)
 
     for table in sorted(tables):
 
         logger.info(f"✔ {table}")
 
-    logger.info("=" * 70)
+    logger.info("=" * 107)
 
 
 # =====================================================
@@ -155,10 +155,10 @@ def create_directories():
 # =====================================================
 def create_tables():
 
-    logger.info("=" * 70)
+    logger.info("=" * 107)
     logger.info(f"{Settings.APP_NAME}")
     logger.info("CREATE TABLES ENTERPRISE")
-    logger.info("=" * 70)
+    logger.info("=" * 107)
 
     try:
 
@@ -187,15 +187,15 @@ def create_tables():
         # =============================================
         show_tables()
 
-        logger.info("=" * 70)
+        logger.info("=" * 107)
         logger.info("ESTRUTURA CRIADA COM SUCESSO")
-        logger.info("=" * 70)
+        logger.info("=" * 107)
 
     except Exception as e:
 
-        logger.error("=" * 70)
+        logger.error("=" * 107)
         logger.error("ERRO CRÍTICO CREATE TABLES")
-        logger.error("=" * 70)
+        logger.error("=" * 107)
 
         logger.error(str(e))
 

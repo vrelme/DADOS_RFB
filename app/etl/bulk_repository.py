@@ -215,7 +215,7 @@ class BulkRepository:
 
         try:
             logger.info(
-                f"{table_name:<20} | INICIO LEITURA | {file_path.name}"
+                f"{table_name:<20}| INICIO LEITURA | {file_path.name}"
             )
             self._prepare_bulk_session()
             result = self.db.execute(text(sql))
@@ -434,7 +434,7 @@ class BulkRepository:
                 f"{model.__tablename__} | "
                 f"{len(data)} registros | "
                 f"{elapsed}s | "
-                f"{rps} reg/s"
+                f"{rps} reg/s               |"
             )
 
             return result
