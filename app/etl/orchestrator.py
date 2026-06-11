@@ -139,7 +139,7 @@ class ETLOrchestrator:
         while True:
 
             self.logger.info(
-                "HEARTBEAT           | ETL em execução..."
+                "HEARTBEAT            | ETL em execução..."
                 
             )
 
@@ -254,7 +254,7 @@ class ETLOrchestrator:
                 total_files=self._all_input_files_count(),
             )
             self.logger.info(
-                f"ETL RUN START | id={run.id} | arquivos={run.total_files} | "
+                f"ETL RUN START    b   | id={run.id} | arquivos={run.total_files} | "
                 f"db={Settings.ACTIVE_DB_NAME}"
             )
             return run.id
@@ -271,7 +271,7 @@ class ETLOrchestrator:
                 status=status,
                 error_message=error_message,
             )
-            self.logger.info(f"ETL RUN {status} | id={self.run_id}")
+            self.logger.info(f"ETL RUN {status}:<13| id={self.run_id}")
         finally:
             db.close()
 
@@ -279,7 +279,7 @@ class ETLOrchestrator:
         db = OperationalSessionLocal()
         try:
             ObservabilityRepository(db).resume_run(self.run_id)
-            self.logger.info(f"ETL RUN RESUME | id={self.run_id}")
+            self.logger.info(f"ETL RUN RESUME       | id={self.run_id}")
         finally:
             db.close()
 
@@ -348,7 +348,7 @@ class ETLOrchestrator:
             finally:
                 self._finish_phase(phase)
         self.logger.info(
-            "RAW_IMPORT | tempo total carga + promocao | "
+            "RAW_IMPORT           | tempo total carga + promocao | "
             f"{format_duration(time.time() - raw_import_started_at)}"
         )
 
@@ -388,7 +388,7 @@ class ETLOrchestrator:
             elapsed = time.time() - table_started_at
             self._table_load_timings[table.table_name] = elapsed
             self.logger.info(
-                f"TEMPO TABELA        | carga {table.table_name} | {format_duration(elapsed)}"
+                f"TEMPO TABELA          | carga {table.table_name} | {format_duration(elapsed)}"
             )
             self._finish_phase(phase)
 
@@ -410,28 +410,28 @@ class ETLOrchestrator:
         self.logger.info("=" * 107)
         for table_name, elapsed in self._table_load_timings.items():
             self.logger.info(
-                f"TEMPO               | carga tabela {table_name}: {format_duration(elapsed)}"
+                f"TEMPO                | carga tabela {table_name}: {format_duration(elapsed)}"
             )
         if self._table_load_timings:
             self.logger.info("-" * 107)
             self.logger.info(
-                f"TEMPO              | carga total: {format_duration(load_total)}"
+                f"TEMPO                | carga total: {format_duration(load_total)}"
             )
             self.logger.info("-" * 107)
 
         if self._promotion_timings:
             for table_name, elapsed in self._promotion_timings.get("tables", {}).items():
                 self.logger.info(
-                    f"TEMPO              | promocao tabela {table_name}: {format_duration(elapsed)}"
+                    f"TEMPO                | promocao tabela {table_name}: {format_duration(elapsed)}"
                 )
             self.logger.info("-" * 107)
             self.logger.info(
-                f"TEMPO              | promocao total: {format_duration(promotion_total)}"
+                f"TEMPO                | promocao total: {format_duration(promotion_total)}"
             )
             self.logger.info("-" * 107)
         self.logger.info("=" * 107)
         self.logger.info(
-            f"TEMPO | total pipeline: {format_duration(total_elapsed)}"
+            f"TEMPO              | total pipeline: {format_duration(total_elapsed)}"
         )
         self.logger.info("=" * 107)
 
@@ -544,7 +544,7 @@ class ETLOrchestrator:
         finally:
             if log_summary:
                 elapsed = round(time.time() - start_parallel, 2)
-                self.logger.info("-" * 80)
+                self.logger.info("-" * 107)
                 self.logger.info(
                     f"PARALELISMO FINALIZADO em {elapsed}s"
                 )
@@ -1105,7 +1105,7 @@ class ETLOrchestrator:
                         records_processed=total,
                     )
                 self.logger.info(
-                    f"FINALIZADO          | "
+                    f"FINALIZADO           | "
                     f"{file_path.name} | "
                     f"{total} registros | "
                     f"{total_time}s"
@@ -1232,7 +1232,7 @@ class ETLOrchestrator:
             )
 
             self.logger.info(
-                f"FINALIZADO          | "
+                f"FINALIZADO           | "
                 f"{file_path.name} | "
                 f"{total} registros | "
                 f"{total_time}s"
