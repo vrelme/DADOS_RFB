@@ -165,7 +165,7 @@ class ETLOrchestrator:
             ram = psutil.virtual_memory().percent
 
             self.logger.info(
-                f"MONITOR             | CPU={cpu}% | RAM={ram}%"
+                f"MONITOR              | CPU={cpu}% | RAM={ram}%"
             )
 
             time.sleep(60)
@@ -254,7 +254,7 @@ class ETLOrchestrator:
                 total_files=self._all_input_files_count(),
             )
             self.logger.info(
-                f"ETL RUN START    b   | id={run.id} | arquivos={run.total_files} | "
+                f"ETL RUN START        | id={run.id} | arquivos={run.total_files} | "
                 f"db={Settings.ACTIVE_DB_NAME}"
             )
             return run.id
@@ -388,7 +388,7 @@ class ETLOrchestrator:
             elapsed = time.time() - table_started_at
             self._table_load_timings[table.table_name] = elapsed
             self.logger.info(
-                f"TEMPO TABELA          | carga {table.table_name} | {format_duration(elapsed)}"
+                f"TEMPO TABELA         | carga {table.table_name} | {format_duration(elapsed)}"
             )
             self._finish_phase(phase)
 
