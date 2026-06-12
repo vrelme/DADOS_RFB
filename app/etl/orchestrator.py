@@ -271,7 +271,7 @@ class ETLOrchestrator:
                 status=status,
                 error_message=error_message,
             )
-            self.logger.info(f"ETL RUN {status}:<13| id={self.run_id}")
+            self.logger.info(f"ETL RUN {status:<13}| id={self.run_id}")
         finally:
             db.close()
 
@@ -388,7 +388,7 @@ class ETLOrchestrator:
             elapsed = time.time() - table_started_at
             self._table_load_timings[table.table_name] = elapsed
             self.logger.info(
-                f"TEMPO TABELA         | carga {table.table_name} | {format_duration(elapsed)}"
+                f"TEMPO TABELA        | carga {table.table_name} | {format_duration(elapsed)}"
             )
             self._finish_phase(phase)
 
@@ -431,7 +431,7 @@ class ETLOrchestrator:
             self.logger.info("-" * 107)
         self.logger.info("=" * 107)
         self.logger.info(
-            f"TEMPO              | total pipeline: {format_duration(total_elapsed)}"
+            f"TEMPO                | total pipeline: {format_duration(total_elapsed)}"
         )
         self.logger.info("=" * 107)
 
