@@ -388,7 +388,7 @@ class ETLOrchestrator:
             elapsed = time.time() - table_started_at
             self._table_load_timings[table.table_name] = elapsed
             self.logger.info(
-                f"TEMPO TABELA        | carga {table.table_name} | {format_duration(elapsed)}"
+                f"TEMPO TABELA         | carga {table.table_name} | {format_duration(elapsed)}"
             )
             self._finish_phase(phase)
 
