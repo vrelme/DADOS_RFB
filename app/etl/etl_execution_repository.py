@@ -49,7 +49,7 @@ class ETLExecutionRepository:
             self.db.refresh(execution)
 
             logger.info(
-                f"ETL STARTED  | "
+                f"ETL STARTED          | "
                 f"id={execution.id} | "
                 f"file={file_name}"
             )
@@ -93,7 +93,7 @@ class ETLExecutionRepository:
             self.db.commit()
 
             logger.info(
-                f"ETL SUCCESS  | "
+                f"ETL SUCCESS          | "
                 f"id={execution.id} | "
                 f"records={records_processed} | "
                 f"duration={execution.duration_seconds}s"
@@ -136,7 +136,7 @@ class ETLExecutionRepository:
             self.db.commit()
 
             logger.error(
-                f"ETL FAILED | "
+                f"ETL FAILED           | "
                 f"id={execution.id} | "
                 f"duration={execution.duration_seconds}s"
             )
@@ -169,7 +169,7 @@ class ETLExecutionRepository:
             self.db.commit()
 
             logger.warning(
-                f"ETL RETRY | "
+                f"ETL RETRY            | "
                 f"id={execution.id} | "
                 f"retry={execution.retry_count}"
             )

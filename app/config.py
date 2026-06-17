@@ -22,6 +22,8 @@ class Settings:
     # =====================================================
     APP_NAME = os.getenv("APP_NAME", "RFB Loader Enterprise")
 
+    APP_VERSION = os.getenv("APP_VERSION", "V3.1.0")
+
     ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 
     DEBUG = os.getenv("DEBUG", "False").lower() == "true"
@@ -194,6 +196,10 @@ class Settings:
 
     MONITORED_FIELDS_BOOTSTRAP_DEFAULTS = (
         os.getenv("MONITORED_FIELDS_BOOTSTRAP_DEFAULTS", "True").lower() == "true"
+    )
+
+    MONITORED_FIELD_AUDIT_ENABLED = (
+        os.getenv("MONITORED_FIELD_AUDIT_ENABLED", "True").lower() == "true"
     )
 
     MONITORED_FIELD_BATCH_SIZE = int(

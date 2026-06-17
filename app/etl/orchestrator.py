@@ -139,7 +139,7 @@ class ETLOrchestrator:
         while True:
 
             self.logger.info(
-                "HEARTBEAT           | ETL em execução..."
+                "HEARTBEAT            | ETL em execução..."
                 
             )
 
@@ -165,7 +165,7 @@ class ETLOrchestrator:
             ram = psutil.virtual_memory().percent
 
             self.logger.info(
-                f"MONITOR             | CPU={cpu}% | RAM={ram}%"
+                f"MONITOR              | CPU={cpu}% | RAM={ram}%"
             )
 
             time.sleep(60)
@@ -176,9 +176,9 @@ class ETLOrchestrator:
     def run(self):
         self._pipeline_started_at = time.time()
 
-        self.logger.info("=" * 80)
+        self.logger.info("=" * 107)
         self.logger.info("RFB LOADER ENTERPRISE")
-        self.logger.info("=" * 80)
+        self.logger.info("=" * 107)
 
         Settings.create_dirs()
 
@@ -216,9 +216,9 @@ class ETLOrchestrator:
             self._finish_run("SUCCESS")
             self._log_timing_summary()
 
-            self.logger.info("=" * 80)
+            self.logger.info("=" * 107)
             self.logger.info("PIPELINE FINALIZADO")
-            self.logger.info("=" * 80)
+            self.logger.info("=" * 107)
 
         except Exception as exc:
             self._finish_run("FAILED", str(exc))
@@ -254,7 +254,7 @@ class ETLOrchestrator:
                 total_files=self._all_input_files_count(),
             )
             self.logger.info(
-                f"ETL RUN START | id={run.id} | arquivos={run.total_files} | "
+                f"ETL RUN START        | id={run.id} | arquivos={run.total_files} | "
                 f"db={Settings.ACTIVE_DB_NAME}"
             )
             return run.id
@@ -271,7 +271,7 @@ class ETLOrchestrator:
                 status=status,
                 error_message=error_message,
             )
-            self.logger.info(f"ETL RUN {status} | id={self.run_id}")
+            self.logger.info(f"ETL RUN {status:<13}| id={self.run_id}")
         finally:
             db.close()
 
@@ -279,7 +279,7 @@ class ETLOrchestrator:
         db = OperationalSessionLocal()
         try:
             ObservabilityRepository(db).resume_run(self.run_id)
-            self.logger.info(f"ETL RUN RESUME | id={self.run_id}")
+            self.logger.info(f"ETL RUN RESUME       | id={self.run_id}")
         finally:
             db.close()
 
@@ -339,24 +339,24 @@ class ETLOrchestrator:
         if Settings.PROMOTE_RAW_IMPORT_AFTER_LOAD:
             phase = self._start_phase("PROMOTE_RAW_IMPORT", table_name="controle_alteracao")
             try:
-                self.logger.info("-" * 80)
+                self.logger.info("-" * 107)
                 self.logger.info(
                     f"PROMOVENDO {Settings.ACTIVE_DB_NAME} -> {Settings.DB_NAME}"
                 )
-                self.logger.info("-" * 80)
+                self.logger.info("-" * 107)
                 self._promotion_timings = RawImportPromotionRepository().promote()
             finally:
                 self._finish_phase(phase)
         self.logger.info(
-            "RAW_IMPORT | tempo total carga + promocao | "
+            "RAW_IMPORT           | tempo total carga + promocao | "
             f"{format_duration(time.time() - raw_import_started_at)}"
         )
 
     def _process_rfb_table(self, table):
         table_started_at = time.time()
-        self.logger.info("-" * 80)
+        self.logger.info("-" * 107)
         self.logger.info(f"PROCESSANDO {table.table_name.upper()}")
-        self.logger.info("-" * 80)
+        self.logger.info("-" * 107)
 
         phase = self._start_phase(
             f"LOAD_{table.table_name.upper()}",
@@ -388,7 +388,7 @@ class ETLOrchestrator:
             elapsed = time.time() - table_started_at
             self._table_load_timings[table.table_name] = elapsed
             self.logger.info(
-                f"TEMPO TABELA | carga {table.table_name} | {format_duration(elapsed)}"
+                f"TEMPO TABELA        | carga {table.table_name} | {format_duration(elapsed)}"
             )
             self._finish_phase(phase)
 
@@ -405,31 +405,35 @@ class ETLOrchestrator:
             else 0
         )
 
-        self.logger.info("=" * 80)
+        self.logger.info("=" * 107)
         self.logger.info("RESUMO DE TEMPOS")
-        self.logger.info("=" * 80)
+        self.logger.info("=" * 107)
         for table_name, elapsed in self._table_load_timings.items():
             self.logger.info(
-                f"TEMPO | carga tabela {table_name}: {format_duration(elapsed)}"
+                f"TEMPO                | carga tabela {table_name}: {format_duration(elapsed)}"
             )
         if self._table_load_timings:
+            self.logger.info("-" * 107)
             self.logger.info(
-                f"TEMPO | carga total: {format_duration(load_total)}"
+                f"TEMPO                | carga total: {format_duration(load_total)}"
             )
+            self.logger.info("-" * 107)
 
         if self._promotion_timings:
             for table_name, elapsed in self._promotion_timings.get("tables", {}).items():
                 self.logger.info(
-                    f"TEMPO | promocao tabela {table_name}: {format_duration(elapsed)}"
+                    f"TEMPO                | promocao tabela {table_name}: {format_duration(elapsed)}"
                 )
+            self.logger.info("-" * 107)
             self.logger.info(
-                f"TEMPO | promocao total: {format_duration(promotion_total)}"
+                f"TEMPO                | promocao total: {format_duration(promotion_total)}"
             )
-
+            self.logger.info("-" * 107)
+        self.logger.info("=" * 107)
         self.logger.info(
-            f"TEMPO | total pipeline: {format_duration(total_elapsed)}"
+            f"TEMPO                | total pipeline: {format_duration(total_elapsed)}"
         )
-        self.logger.info("=" * 80)
+        self.logger.info("=" * 107)
 
     def _discover_table_files(self, table):
         files = []
@@ -480,7 +484,7 @@ class ETLOrchestrator:
             completed += len(wave)
 
         elapsed = round(time.time() - start_parallel, 2)
-        self.logger.info("-" * 80)
+        self.logger.info("-" * 107)
         self.logger.info(
             f"PARALELISMO ADAPTATIVO FINALIZADO   | "
             f"arquivos={completed} | {elapsed}s"
@@ -540,7 +544,7 @@ class ETLOrchestrator:
         finally:
             if log_summary:
                 elapsed = round(time.time() - start_parallel, 2)
-                self.logger.info("-" * 80)
+                self.logger.info("-" * 107)
                 self.logger.info(
                     f"PARALELISMO FINALIZADO em {elapsed}s"
                 )
@@ -677,11 +681,11 @@ class ETLOrchestrator:
     # =====================================================
     def _process_empresa(self):
 
-        self.logger.info("-" * 80)
+        self.logger.info("-" * 107)
         self.logger.info(
             "PROCESSANDO EMPRESA"
         )
-        self.logger.info("-" * 80)
+        self.logger.info("-" * 107)
 
         phase = self._start_phase("LOAD_EMPRESA", table_name="empresa")
 
@@ -762,11 +766,11 @@ class ETLOrchestrator:
     # =====================================================
     def _process_estabelecimento(self):
 
-        self.logger.info("-" * 80)
+        self.logger.info("-" * 107)
         self.logger.info(
             "PROCESSANDO ESTABELECIMENTO"
         )
-        self.logger.info("-" * 80)
+        self.logger.info("-" * 107)
 
         phase = self._start_phase("LOAD_ESTABELECIMENTO", table_name="estabelecimento")
 
@@ -869,11 +873,11 @@ class ETLOrchestrator:
     # =====================================================
     def _process_socio(self):
 
-        self.logger.info("-" * 80)
+        self.logger.info("-" * 107)
         self.logger.info(
             "PROCESSANDO SOCIO"
         )
-        self.logger.info("-" * 80)
+        self.logger.info("-" * 107)
 
         phase = self._start_phase("LOAD_SOCIO", table_name="socio")
 
@@ -979,11 +983,11 @@ class ETLOrchestrator:
 
         try:
 
-            self.logger.info("-" * 80)
+            self.logger.info("-" * 107)
             self.logger.info(
                 f"PROCESSANDO: {file_path.name}"
             )
-            self.logger.info("-" * 80)
+            self.logger.info("-" * 107)
 
             already_successful_in_current_run = (
                 self.run_id
@@ -1101,7 +1105,7 @@ class ETLOrchestrator:
                         records_processed=total,
                     )
                 self.logger.info(
-                    f"FINALIZADO   | "
+                    f"FINALIZADO           | "
                     f"{file_path.name} | "
                     f"{total} registros | "
                     f"{total_time}s"
@@ -1228,7 +1232,7 @@ class ETLOrchestrator:
             )
 
             self.logger.info(
-                f"FINALIZADO   | "
+                f"FINALIZADO           | "
                 f"{file_path.name} | "
                 f"{total} registros | "
                 f"{total_time}s"

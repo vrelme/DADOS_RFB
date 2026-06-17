@@ -27,13 +27,13 @@ sequenceDiagram
 
     Orc->>Promo: promote()
     Promo->>FinalDB: CREATE DATABASE IF NOT EXISTS
-    alt dados_rfb nao existia
-        Promo->>FinalDB: CREATE TABLE LIKE rfb_import + INSERT SELECT
+    alt tabela final nao existe
+        Promo->>FinalDB: RENAME TABLE rfb_import.tabela TO dados_rfb.tabela
         Promo->>FinalDB: INSERT controle_alteracao status=copiada
-    else dados_rfb existe
-        Promo->>FinalDB: compara COUNT/CHECKSUM por tabela
-        Promo->>FinalDB: INSERT controle_alteracao sem alteracao/tem alteracao
-        Promo->>FinalDB: substitui tabelas alteradas
+    else tabela final existe
+        Promo->>FinalDB: audita campos monitorados configurados
+        Promo->>FinalDB: RENAME TABLE tabela final para backup e rfb_import para final
+        Promo->>FinalDB: INSERT controle_alteracao status=promovida
     end
 
     Orc->>OpsDB: finish etl_run SUCCESS ou FAILED
