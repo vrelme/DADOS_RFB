@@ -39,7 +39,7 @@ identificava qual versao estava em execucao.
 - Em `app/config.py`, foi adicionada a configuracao `APP_VERSION`, lida do `.env`.
 - Em `app/main.py`, o `banner()` agora registra `Versão da aplicação: <valor>`.
 - Em `.env.example`, `README.md` e `docs/APPLICATION_DOCUMENTATION.md`, a variavel
-  `APP_VERSION=V3.0.0` foi documentada.
+  `APP_VERSION=V3.1.0` foi documentada.
 
 ### Para O Analista Junior
 

@@ -1,6 +1,7 @@
 # app/etl/raw_import_promotion.py
 
 import logging
+import math
 
 import time
 
@@ -297,6 +298,8 @@ class RawImportPromotionRepository:
         offset = 0
         table = RFB_TABLES_BY_NAME[table_name]
         total_rows = self._count_table_rows(table)
+        total_batches = math.ceil(total_rows / batch_size) if total_rows > 0 else 0
+        started_at = time.time()
         
         logger.info(
             f"{self._log_prefix('MONITORAMENTO')} {table_name}.{field_name}: INICIO processamento em lotes"
@@ -308,11 +311,14 @@ class RawImportPromotionRepository:
             f"{self._log_prefix('MONITORAMENTO')} {table_name}.{field_name}: ├─ Tamanho lote: {batch_size}"
         )
         logger.info(
+            f"{self._log_prefix('MONITORAMENTO')} {table_name}.{field_name}: ├─ Total lotes: {total_batches}"
+        )
+        logger.info(
             f"{self._log_prefix('MONITORAMENTO')} {table_name}.{field_name}: └─ INICIO comparacao valores (antigos vs novos)"
         )
 
         batch_count = 0
-        while self._import_batch_has_rows(table, batch_size, offset):
+        while batch_count < total_batches:
             batch_count += 1
             batch_inserted = self._insert_monitored_field_history(
                 table_name,
@@ -321,7 +327,7 @@ class RawImportPromotionRepository:
                 offset=offset,
             )
             inserted += batch_inserted
-            
+
             self._refresh_monitored_field_state(
                 table_name,
                 field_name,
@@ -330,18 +336,28 @@ class RawImportPromotionRepository:
             )
             offset += batch_size
             progress_percent = min((offset / total_rows) * 100, 100) if total_rows > 0 else 0
+            elapsed = time.time() - started_at
+            eta = (
+                self._format_duration((elapsed / batch_count) * (total_batches - batch_count))
+                if batch_count and total_batches > batch_count
+                else "0s"
+            )
             logger.info(
                 f"{self._log_prefix('MONITORAMENTO')} {table_name}.{field_name}: "
-                f"[{int(progress_percent):3d}%] lote {batch_count} | "
-                f"{offset}/{total_rows} registros | {batch_inserted} mudancas detectadas"
+                f"[{int(progress_percent):3d}%] lote {batch_count}/{total_batches} | "
+                f"{offset}/{total_rows} registros | {batch_inserted} mudancas detectadas | ETA: {eta}"
             )
 
+        elapsed = time.time() - started_at
+        throughput = (total_rows / elapsed) if elapsed > 0 else 0
         logger.info(
             f"{self._log_prefix('MONITORAMENTO')} {table_name}.{field_name}: └─ FIM comparacao valores"
         )
         logger.info(
             f"{self._log_prefix('MONITORAMENTO')} {table_name}.{field_name}: FIM processamento | "
-            f"total={inserted} alteracoes em {batch_count} lotes"
+            f"total={inserted} alteracoes em {batch_count} lotes | "
+            f"tempo={self._format_duration(elapsed)} | "
+            f"velocidade={throughput:.2f} reg/s"
         )
         return inserted
     
@@ -355,6 +371,16 @@ class RawImportPromotionRepository:
                 return result.cnt if result else 0
         except Exception:
             return 0
+
+    def _format_duration(self, seconds):
+        seconds = int(seconds or 0)
+        hours, remainder = divmod(seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        if hours:
+            return f"{hours}h{minutes:02d}m{seconds:02d}s"
+        if minutes:
+            return f"{minutes}m{seconds:02d}s"
+        return f"{seconds}s"
 
     def _import_batch_has_rows(self, table, batch_size, offset):
         import_table = f"{quote_identifier(self.import_db)}.{quote_identifier(table.table_name)}"

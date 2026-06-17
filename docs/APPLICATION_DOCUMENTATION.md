@@ -212,7 +212,7 @@ python -m app.main
 Configuração recomendada para carga completa:
 
 ```env
-APP_VERSION=V3.0.0
+APP_VERSION=V3.1.0
 LOAD_STRATEGY=load_data
 MERGE_STRATEGY=full_refresh
 DB_LOCAL_INFILE=True

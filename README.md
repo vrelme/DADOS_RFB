@@ -144,7 +144,7 @@ Por performance, a auditoria detalhada campo-a-campo fica limitada por configura
 ## Variaveis Principais
 
 ```env
-APP_VERSION=V3.0.0
+APP_VERSION=V3.1.0
 DB_NAME=dados_rfb
 IMPORT_DB_NAME=rfb_import
 OPERATIONAL_DB_NAME=dados_rfb_ops
