@@ -36,10 +36,11 @@ from app.etl.rfb_manifest import RFB_TABLES, raw_import_create_table_sql
 
 
 def banner(logger):
-    logger.info("=" * 70)
+    logger.info("=" * 107)
     logger.info(Settings.APP_NAME)
+    logger.info(f"Versão da aplicação: {Settings.APP_VERSION}")
     logger.info("Inicialização ambiente de produção")
-    logger.info("=" * 70)
+    logger.info("=" * 107)
 
 
 def validate_directories(logger):
@@ -291,12 +292,12 @@ def main():
 
         total = time.time() - start
 
-        logger.info("=" * 70)
+        logger.info("=" * 107)
         logger.info(f"Processamento finalizado com sucesso em {total:.2f}s")
-        logger.info("=" * 70)
+        logger.info("=" * 107)
 
     except DatabaseOperationError as e:
-        logger.error("=" * 70)
+        logger.error("=" * 107)
         logger.error("EXECUÇÃO INTERROMPIDA POR ERRO DE BANCO")
         logger.error(f"Operação: {e.operation}")
         logger.error(f"Tabela: {e.table_name}")
@@ -307,16 +308,16 @@ def main():
         logger.error("3. Rode SHOW FULL PROCESSLIST e finalize sessões bloqueadoras.")
         logger.error("4. Para carga completa, use MERGE_STRATEGY=full_refresh.")
         logger.error(f"Erro original: {e.original_error}")
-        logger.error("=" * 70)
+        logger.error("=" * 107)
 
     except AppError as e:
-        logger.error("=" * 70)
+        logger.error("=" * 107)
         logger.error("EXECUÇÃO INTERROMPIDA")
         logger.error(str(e))
-        logger.error("=" * 70)
+        logger.error("=" * 107)
 
     except SQLAlchemyError as e:
-        logger.error("=" * 70)
+        logger.error("=" * 107)
         logger.error("EXECUÇÃO INTERROMPIDA POR ERRO DE BANCO")
         code = mysql_error_code(e)
         if code == 2003:
@@ -329,14 +330,14 @@ def main():
         else:
             logger.error(str(e))
         logger.error(traceback.format_exc())
-        logger.error("=" * 70)
+        logger.error("=" * 107)
 
     except Exception as e:
-        logger.error("=" * 70)
+        logger.error("=" * 107)
         logger.error("ERRO FATAL NA EXECUÇÃO")
         logger.error(str(e))
         logger.error(traceback.format_exc())
-        logger.error("=" * 70)
+        logger.error("=" * 107)
 
 
 if __name__ == "__main__":

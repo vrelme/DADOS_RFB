@@ -1,6 +1,6 @@
 # Dados Publicos CNPJ - RFB Loader Enterprise
 
-Processo ETL para carga dos dados publicos do CNPJ disponibilizados pela Receita Federal do Brasil.
+Processo ETL para carga dos dados publicos do CNPJ disponibilizados pela Receita Federal do Brasil em MariaDB.
 
 Fonte oficial e layout dos arquivos: [metadados da RFB](https://www.gov.br/receitafederal/dados/cnpj-metadados.pdf).
 
@@ -15,6 +15,27 @@ dados_rfb_ops -> controle operacional do ETL
 ```
 
 Esse desenho evita misturar metadados do processo com dados de negocio e reduz bloqueios no banco final durante cargas grandes.
+
+## Banco E Cliente SQL
+
+Esta versao esta padronizada para:
+
+- MariaDB Server, usando o driver Python `mysql+pymysql`;
+- DBeaver 26.1.0 como cliente SQL recomendado para administracao, consultas e acompanhamento operacional.
+
+Configuracao recomendada de conexao no DBeaver 26.1.0:
+
+```text
+Tipo de conexao: MariaDB
+Host: localhost
+Porta: 3306
+Banco inicial: dados_rfb
+Usuario: usuario configurado em DB_USER
+Senha: senha configurada em DB_PASSWORD
+```
+
+Os bancos usados pela aplicacao sao criados/verificados pelo ETL conforme as variaveis `DB_NAME`,
+`IMPORT_DB_NAME` e `OPERATIONAL_DB_NAME`.
 
 ## Arquivos Processados
 
@@ -107,7 +128,9 @@ Depois disso, as tabelas brutas sao recriadas vazias em `rfb_import` para a prox
 Antes do `rename_swap`, o ETL executa auditoria seletiva dos campos configurados em
 `dados_rfb.controle_campo_monitorado`. Por padrao, `estabelecimento.situacao_cadastral`
 e monitorado para registrar historico de mudanca ativa/inativa em
-`dados_rfb.historico_campo_monitorado`.
+`dados_rfb.historico_campo_monitorado`. Essa auditoria so roda quando a tabela ja existe
+em `dados_rfb`; se a tabela final ainda nao existe, a promocao e feita como copia simples
+por `RENAME TABLE`, sem comparacao linha-a-linha.
 
 A estrategia antiga de copia em lotes continua disponivel com `DB_PROMOTION_STRATEGY=copy`.
 Nesse modo, se `dados_rfb` existir, compara tabela por tabela e registra em `controle_alteracao`:
@@ -121,6 +144,7 @@ Por performance, a auditoria detalhada campo-a-campo fica limitada por configura
 ## Variaveis Principais
 
 ```env
+APP_VERSION=V3.1.0
 DB_NAME=dados_rfb
 IMPORT_DB_NAME=rfb_import
 OPERATIONAL_DB_NAME=dados_rfb_ops
@@ -135,12 +159,27 @@ RAW_IMPORT_FAST_SCHEMA=True
 PROMOTE_RAW_IMPORT_AFTER_LOAD=True
 DB_PROMOTION_STRATEGY=rename_swap
 MONITORED_FIELDS_BOOTSTRAP_DEFAULTS=True
+MONITORED_FIELD_AUDIT_ENABLED=True
 CONTROL_DIFF_MAX_ROWS=1000
 CONTROL_DIFF_DETAIL_TABLES=cnae,moti,munic,natju,pais,quals
 DB_LOCAL_INFILE=True
 ```
 
-Para `LOAD DATA LOCAL INFILE`, o MySQL/MariaDB tambem precisa estar com `local_infile=ON` no servidor.
+`APP_VERSION` e exibida no cabecalho inicial do log para facilitar auditoria da versao
+executada em producao.
+
+Para rodadas de performance em que o historico de campos monitorados pode ser adiado,
+defina `MONITORED_FIELD_AUDIT_ENABLED=False`. Isso evita a auditoria pesada de
+`estabelecimento.situacao_cadastral` durante a promocao.
+
+Para `LOAD DATA LOCAL INFILE`, o MariaDB tambem precisa estar com `local_infile=ON` no servidor.
+
+Validacao recomendada no DBeaver 26.1.0:
+
+```sql
+SHOW GLOBAL VARIABLES LIKE 'local_infile';
+SET GLOBAL local_infile = 1;
+```
 
 ## Execucao
 

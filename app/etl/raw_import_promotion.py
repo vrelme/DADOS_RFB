@@ -1,6 +1,7 @@
 # app/etl/raw_import_promotion.py
 
 import logging
+import math
 
 import time
 
@@ -117,10 +118,20 @@ class RawImportPromotionRepository:
             
             logger.info(f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] ({index}/{total_tables}) ┌─ INICIO tabela '{table.table_name}'")
             
-            # Etapa 1: Auditoria de campos monitorados
-            logger.info(f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] ({index}/{total_tables}) │  ├─ INICIO auditoria campos monitorados")
-            self._audit_monitored_fields(table.table_name)
-            logger.info(f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] ({index}/{total_tables}) │  └─ FIM auditoria campos monitorados")
+            if existed:
+                # Etapa 1: Auditoria de campos monitorados
+                logger.info(f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] ({index}/{total_tables}) │  ├─ INICIO auditoria campos monitorados")
+                self._audit_monitored_fields(table.table_name)
+                logger.info(f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] ({index}/{total_tables}) │  └─ FIM auditoria campos monitorados")
+            else:
+                logger.info(
+                    f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] ({index}/{total_tables}) │  ├─ "
+                    "Tabela inexistente no banco final; pulando comparacao/auditoria linha-a-linha"
+                )
+                logger.info(
+                    f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] ({index}/{total_tables}) │  └─ "
+                    "Promocao sera copia simples por RENAME TABLE"
+                )
             
             # Etapa 2: Swap da tabela (RENAME)
             logger.info(f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] ({index}/{total_tables}) │  ├─ INICIO swap/rename tabela")
@@ -136,6 +147,8 @@ class RawImportPromotionRepository:
                     f"para {self.final_db}.{table.table_name}. "
                     "Sem copia linha-a-linha para reduzir tempo de promocao."
                 )
+                if not existed:
+                    detail += " Tabela final inexistente; comparacao/auditoria foi ignorada por nao haver base anterior."
                 self._insert_control(conn, table.table_name, status, detail)
             logger.info(f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] ({index}/{total_tables}) │  └─ FIM registro de controle")
             
@@ -202,6 +215,13 @@ class RawImportPromotionRepository:
         logger.debug(f"{self._log_prefix('RECREATE')} {table_name}: FIM recriar schema vazio")
 
     def _audit_monitored_fields(self, table_name):
+        if not Settings.MONITORED_FIELD_AUDIT_ENABLED:
+            logger.info(
+                f"{self._log_prefix('MONITORAMENTO')} {table_name}: "
+                "auditoria de campos monitorados desabilitada por configuracao"
+            )
+            return
+
         fields = self._monitored_fields_for_table(table_name)
         if not fields:
             logger.info(f"{self._log_prefix('MONITORAMENTO')} {table_name}: nenhum campo monitorado")
@@ -278,6 +298,8 @@ class RawImportPromotionRepository:
         offset = 0
         table = RFB_TABLES_BY_NAME[table_name]
         total_rows = self._count_table_rows(table)
+        total_batches = math.ceil(total_rows / batch_size) if total_rows > 0 else 0
+        started_at = time.time()
         
         logger.info(
             f"{self._log_prefix('MONITORAMENTO')} {table_name}.{field_name}: INICIO processamento em lotes"
@@ -289,11 +311,14 @@ class RawImportPromotionRepository:
             f"{self._log_prefix('MONITORAMENTO')} {table_name}.{field_name}: ├─ Tamanho lote: {batch_size}"
         )
         logger.info(
+            f"{self._log_prefix('MONITORAMENTO')} {table_name}.{field_name}: ├─ Total lotes: {total_batches}"
+        )
+        logger.info(
             f"{self._log_prefix('MONITORAMENTO')} {table_name}.{field_name}: └─ INICIO comparacao valores (antigos vs novos)"
         )
 
         batch_count = 0
-        while self._import_batch_has_rows(table, batch_size, offset):
+        while batch_count < total_batches:
             batch_count += 1
             batch_inserted = self._insert_monitored_field_history(
                 table_name,
@@ -302,7 +327,7 @@ class RawImportPromotionRepository:
                 offset=offset,
             )
             inserted += batch_inserted
-            
+
             self._refresh_monitored_field_state(
                 table_name,
                 field_name,
@@ -311,18 +336,28 @@ class RawImportPromotionRepository:
             )
             offset += batch_size
             progress_percent = min((offset / total_rows) * 100, 100) if total_rows > 0 else 0
+            elapsed = time.time() - started_at
+            eta = (
+                self._format_duration((elapsed / batch_count) * (total_batches - batch_count))
+                if batch_count and total_batches > batch_count
+                else "0s"
+            )
             logger.info(
                 f"{self._log_prefix('MONITORAMENTO')} {table_name}.{field_name}: "
-                f"[{int(progress_percent):3d}%] lote {batch_count} | "
-                f"{offset}/{total_rows} registros | {batch_inserted} mudancas detectadas"
+                f"[{int(progress_percent):3d}%] lote {batch_count}/{total_batches} | "
+                f"{offset}/{total_rows} registros | {batch_inserted} mudancas detectadas | ETA: {eta}"
             )
 
+        elapsed = time.time() - started_at
+        throughput = (total_rows / elapsed) if elapsed > 0 else 0
         logger.info(
             f"{self._log_prefix('MONITORAMENTO')} {table_name}.{field_name}: └─ FIM comparacao valores"
         )
         logger.info(
             f"{self._log_prefix('MONITORAMENTO')} {table_name}.{field_name}: FIM processamento | "
-            f"total={inserted} alteracoes em {batch_count} lotes"
+            f"total={inserted} alteracoes em {batch_count} lotes | "
+            f"tempo={self._format_duration(elapsed)} | "
+            f"velocidade={throughput:.2f} reg/s"
         )
         return inserted
     
@@ -336,6 +371,16 @@ class RawImportPromotionRepository:
                 return result.cnt if result else 0
         except Exception:
             return 0
+
+    def _format_duration(self, seconds):
+        seconds = int(seconds or 0)
+        hours, remainder = divmod(seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        if hours:
+            return f"{hours}h{minutes:02d}m{seconds:02d}s"
+        if minutes:
+            return f"{minutes}m{seconds:02d}s"
+        return f"{seconds}s"
 
     def _import_batch_has_rows(self, table, batch_size, offset):
         import_table = f"{quote_identifier(self.import_db)}.{quote_identifier(table.table_name)}"
@@ -705,6 +750,10 @@ class RawImportPromotionRepository:
 
     def _compare_or_copy_table(self, table_name, columns, key_columns):
         if not self._table_exists(self.final_db, table_name):
+            logger.info(
+                f"{self._log_prefix('PROMOCAO')} {table_name}: tabela inexistente em "
+                f"{self.final_db}; copiando de {self.import_db} sem comparacao linha-a-linha"
+            )
             self._replace_final_table(table_name)
             with self.final_engine.begin() as conn:
                 self._insert_control(

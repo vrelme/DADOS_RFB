@@ -58,7 +58,8 @@ Ao final de cada tabela promovida, a tabela bruta correspondente e recriada vazi
 Regras da estrategia `rename_swap`:
 
 - valida que as tabelas com arquivos encontrados possuem registros em `rfb_import`;
-- audita campos monitorados antes de mover a tabela;
+- se a tabela ainda nao existe em `dados_rfb`, move a tabela nova sem comparacao/auditoria linha-a-linha;
+- se a tabela ja existe em `dados_rfb`, audita campos monitorados antes de mover a tabela;
 - move cada tabela de `rfb_import` para `dados_rfb`;
 - se a tabela final ja existir, troca a tabela final por uma tabela nova carregada;
 - registra a promocao em `dados_rfb.controle_alteracao`;
@@ -73,7 +74,8 @@ DB_PROMOTION_STRATEGY=copy
 Regras da estrategia `copy`:
 
 - se `dados_rfb` nao existir, cria e copia todas as tabelas;
-- se `dados_rfb` existir, compara contagem e checksum por tabela;
+- se `dados_rfb` existir, copia sem comparacao as tabelas finais inexistentes;
+- se a tabela ja existir em `dados_rfb`, compara contagem e checksum por tabela;
 - registra o resultado em `dados_rfb.controle_alteracao`;
 - substitui a tabela final quando houver divergencia.
 
@@ -182,7 +184,9 @@ Ver tambem: [Requisitos](REQUIREMENTS.md).
 
 ## 1. Visão Geral
 
-O RFB Loader Enterprise é uma aplicação Python para carga dos dados públicos de CNPJ da Receita Federal do Brasil em banco relacional MySQL/MariaDB.
+O RFB Loader Enterprise é uma aplicação Python para carga dos dados públicos de CNPJ da Receita Federal do Brasil em banco relacional MariaDB.
+
+Esta versão usa MariaDB como SGBD alvo e DBeaver 26.1.0 como cliente SQL recomendado para administração, inspeção dos dados e acompanhamento operacional. A aplicação acessa o MariaDB pelo driver SQLAlchemy `mysql+pymysql`, mantendo compatibilidade com o protocolo MySQL usado pelo MariaDB.
 
 O pipeline atual usa uma arquitetura em camadas:
 
@@ -208,13 +212,22 @@ python -m app.main
 Configuração recomendada para carga completa:
 
 ```env
+APP_VERSION=V3.1.0
 LOAD_STRATEGY=load_data
 MERGE_STRATEGY=full_refresh
 DB_LOCAL_INFILE=True
 MAX_WORKERS=4
 ```
 
-Para o `LOAD DATA LOCAL INFILE` funcionar, o MySQL/MariaDB precisa estar com `local_infile` habilitado no cliente e no servidor:
+`APP_VERSION` deve ser mantida no `.env` pelo analista responsavel pela implantacao.
+Na inicializacao, o valor e registrado no cabecalho do log junto com o nome da aplicacao.
+
+Para reduzir carga no MariaDB em janelas de importacao grandes, `MONITORED_FIELD_AUDIT_ENABLED=False`
+desliga temporariamente a auditoria dos campos configurados em `controle_campo_monitorado`.
+Use essa opcao quando a prioridade for concluir a carga/promocao e o historico detalhado
+puder ser processado em outro momento.
+
+Para o `LOAD DATA LOCAL INFILE` funcionar, o MariaDB precisa estar com `local_infile` habilitado no cliente e no servidor:
 
 ```sql
 SHOW GLOBAL VARIABLES LIKE 'local_infile';
@@ -281,7 +294,7 @@ sequenceDiagram
     participant Orc as ETLOrchestrator
     participant Worker as Worker process
     participant Repo as BulkRepository
-    participant DB as MySQL/MariaDB
+    participant DB as MariaDB
 
     Main->>Orc: run()
     Orc->>Repo: truncate_table("*_staging")
@@ -521,7 +534,7 @@ Estratégia recomendada para grandes volumes. Usa `LOAD DATA LOCAL INFILE` para 
 Requisitos:
 
 - `DB_LOCAL_INFILE=True` no `.env`;
-- `local_infile=ON` no MySQL/MariaDB;
+- `local_infile=ON` no MariaDB;
 - permissão do usuário de banco para carga local;
 - arquivos acessíveis pelo processo Python.
 
@@ -588,7 +601,7 @@ KILL <id_da_sessao_bloqueadora>;
 Também verifique:
 
 - execução antiga do ETL ainda ativa;
-- transação aberta no MySQL Workbench;
+- transação aberta no DBeaver 26.1.0;
 - consulta longa sobre tabelas finais ou staging;
 - concorrência com outra carga.
 
@@ -625,7 +638,7 @@ Recomendações práticas:
 - manter `LOAD_STRATEGY=load_data`;
 - usar `MERGE_STRATEGY=full_refresh` para carga completa;
 - ajustar `MAX_WORKERS` conforme CPU, disco e capacidade do banco;
-- evitar Workbench ou BI consultando as tabelas durante a carga;
+- evitar DBeaver, BI ou outra ferramenta consultando as tabelas durante a carga;
 - criar índices após a carga quando o volume crescer e o tempo de insert virar gargalo;
 - manter `innodb_buffer_pool_size` compatível com a RAM disponível.
 
@@ -636,7 +649,7 @@ Arquivos existentes:
 - [Dados_RFB_ERD.png](Dados_RFB_ERD.png)
 - [Diagramas_UML.png](Diagramas_UML.png)
 - [NOVOLAYOUTDOSDADOSABERTOSDOCNPJ.pdf](NOVOLAYOUTDOSDADOSABERTOSDOCNPJ.pdf)
-- [ERD_Dados_RFB.pgerd](ERD_Dados_RFB.pgerd)
+- [ERD_Dados_RFB.pgerd](ERD_Dados_RFB.pgerd) - artefato legado; para esta versao, use DBeaver 26.1.0 para inspecionar/gerar o ERD a partir do MariaDB.
 
 Diagramas Mermaid adicionados:
 
