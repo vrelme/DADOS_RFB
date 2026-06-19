@@ -29,17 +29,15 @@ O cliente SQL recomendado para administracao e acompanhamento operacional e o DB
 - A estrategia antiga de copia em lotes deve permanecer disponivel com `DB_PROMOTION_STRATEGY=copy`.
 - A meta minima e reduzir em pelo menos 80% o tempo da promocao em comparacao com `INSERT INTO ... SELECT`.
 
-## Requisitos De Auditoria Seletiva
+## Requisitos De Monitoracao De CNPJ E Socios
 
-- A aplicacao deve permitir configurar campos especificos para auditoria mensal.
-- A configuracao deve ficar em `dados_rfb.controle_campo_monitorado`.
-- Por padrao, `estabelecimento.situacao_cadastral` deve ser monitorado para registrar mudancas de ativa/inativa.
-- A tabela de configuracao deve ser administrada apenas por usuarios administradores do banco.
-- O ETL nao deve comparar todos os campos de todas as tabelas grandes.
-- O ETL deve manter `dados_rfb.estado_campo_monitorado` como estado atual dos campos monitorados.
-- O ETL deve registrar alteracoes em `dados_rfb.historico_campo_monitorado`, com tabela, campo, chave, valor anterior, valor novo, data e hora.
-- A auditoria seletiva deve ocorrer antes do `rename_swap` apenas para tabelas ja existentes no banco final, comparando o CSV novo em `rfb_import` contra o estado salvo da execucao anterior.
-
+- O ETL deve registrar CNPJs novos antes do `rename_swap`, comparando `rfb_import.estabelecimento` com `dados_rfb.estabelecimento`.
+- O ETL deve registrar CNPJs que ficaram ativos, considerando mudanca de situacao cadastral para `02`.
+- O ETL deve registrar CNPJs que ficaram inativos, considerando mudanca de `02` para qualquer outra situacao cadastral.
+- O ETL deve registrar empresas cujos socios mudaram, comparando quantidade e hash dos dados de socios por `cnpj_basico`.
+- Os detalhes devem ser gravados em `dados_rfb.monitoramento_cnpj_mudanca`.
+- Os totais por execucao devem ser gravados em `dados_rfb.resumo_monitoramento_cnpj` e tambem resumidos em `dados_rfb.controle_alteracao`.
+- A monitoracao deve ocorrer antes do `rename_swap` apenas para tabelas ja existentes no banco final, comparando o CSV novo em `rfb_import` contra a base anterior em `dados_rfb`.
 ## Requisitos De Tempo E Observabilidade
 
 - O log deve mostrar o tempo gasto por tabela durante a carga dos CSVs.

@@ -15,7 +15,7 @@ Melhoria de monitoramento do processo de auditoria de campos monitorados, com:
 ### `app/etl/raw_import_promotion.py`
 
 - adicionada função `_format_duration` para exibir tempo em `s`, `m:ss` e `h:mm:ss`
-- calculado `total_batches` com `math.ceil(total_rows / batch_size)`
+- substituida a auditoria generica em lotes por monitoracao especifica de CNPJ e socios
 - registrado `lote {batch_count}/{total_batches}` em cada progresso de lote
 - exibido `ETA` aproximado com base em tempo médio de lote
 - exibido resumo final com `tempo` e `velocidade` em `reg/s`
