@@ -738,6 +738,19 @@ class ETLOrchestrator:
             and Settings.RAW_IMPORT_RESET_SCHEMA
         )
 
+    def _raw_import_table_has_rows(self, table_name):
+        if Settings.SYNC_STRATEGY not in Settings.RAW_IMPORT_STRATEGIES:
+            return True
+
+        db = SessionLocal()
+        try:
+            return (
+                db.execute(text(f"SELECT 1 FROM `{table_name}` LIMIT 1")).first()
+                is not None
+            )
+        finally:
+            db.close()
+
     def _validate_raw_import_loaded(self):
         if not self._raw_import_expected_tables:
             return
@@ -1112,6 +1125,7 @@ class ETLOrchestrator:
                     table_name,
                     file_path.name,
                 )
+                and self._raw_import_table_has_rows(table_name)
             )
 
             if already_successful_in_current_run:

@@ -491,6 +491,19 @@ class RawImportPromotionRepository:
                 last_error = exc
 
                 if self._mysql_error_code(exc) != 1205 or attempt == max_retries:
+                    logger.error(
+                        f"{self._log_prefix('MONITORAMENTO')} erro banco | "
+                        f"operacao={operation} | tentativa={attempt}/{max_retries} | "
+                        f"codigo_mysql={self._mysql_error_code(exc)} | "
+                        "detalhes gravados em error.log"
+                    )
+                    error_detail_logger.error(
+                        f"{self._log_prefix('MONITORAMENTO')} erro banco | "
+                        f"operacao={operation} | tentativa={attempt}/{max_retries} | "
+                        f"codigo_mysql={self._mysql_error_code(exc)} | erro={exc}",
+                        exc_info=True,
+                    )
+                    self._log_database_processes()
                     raise
 
                 logger.warning(

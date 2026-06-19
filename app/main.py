@@ -1,5 +1,6 @@
 import time
 import traceback
+import logging
 from pathlib import Path
 
 from sqlalchemy import text
@@ -33,6 +34,9 @@ from app.models import (
 )
 from app.etl.orchestrator import ETLOrchestrator
 from app.etl.rfb_manifest import RFB_TABLES, raw_import_create_table_sql
+
+
+error_detail_logger = logging.getLogger("error_detail")
 
 
 def banner(logger):
@@ -248,7 +252,13 @@ def execute_with_database_recovery(logger, operation_name, operation):
             logger.error(
                 f"DB RECOVERY | conexao perdida | "
                 f"operacao={operation_name} | tentativa_execucao={attempt} | "
-                f"erro={exc}"
+                "detalhes gravados em error.log"
+            )
+            error_detail_logger.error(
+                f"DB RECOVERY | conexao perdida | "
+                f"operacao={operation_name} | tentativa_execucao={attempt} | "
+                f"erro={exc}",
+                exc_info=True,
             )
             wait_for_database_recovery(
                 logger,
@@ -309,12 +319,14 @@ def main():
         logger.error("4. Para carga completa, use MERGE_STRATEGY=full_refresh.")
         logger.error(f"Erro original: {e.original_error}")
         logger.error("=" * 107)
+        error_detail_logger.error("DatabaseOperationError fatal", exc_info=True)
 
     except AppError as e:
         logger.error("=" * 107)
         logger.error("EXECUÇÃO INTERROMPIDA")
         logger.error(str(e))
         logger.error("=" * 107)
+        error_detail_logger.error("AppError fatal", exc_info=True)
 
     except SQLAlchemyError as e:
         logger.error("=" * 107)
@@ -329,14 +341,16 @@ def main():
             logger.error("A aplicação tentará retry nas operações administrativas configuradas.")
         else:
             logger.error(str(e))
-        logger.error(traceback.format_exc())
+        logger.error("Detalhes tecnicos gravados em error.log")
+        error_detail_logger.error(f"SQLAlchemyError fatal: {e}", exc_info=True)
         logger.error("=" * 107)
 
     except Exception as e:
         logger.error("=" * 107)
         logger.error("ERRO FATAL NA EXECUÇÃO")
         logger.error(str(e))
-        logger.error(traceback.format_exc())
+        logger.error("Detalhes tecnicos gravados em error.log")
+        error_detail_logger.error(f"Erro fatal nao tratado: {e}", exc_info=True)
         logger.error("=" * 107)
 
 

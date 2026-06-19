@@ -400,6 +400,7 @@ class ObservabilityRepository:
                 ETLCheckpoint.table_name == table_name,
                 ETLCheckpoint.file_name == file_name,
                 ETLCheckpoint.status == "SUCCESS",
+                ETLCheckpoint.records_processed > 0,
             )
             .one_or_none()
         )
