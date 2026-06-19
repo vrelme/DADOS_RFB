@@ -125,12 +125,11 @@ Por padrao, a promocao usa `DB_PROMOTION_STRATEGY=rename_swap`: as tabelas carre
 `rfb_import` sao movidas para `dados_rfb` com `RENAME TABLE`, evitando copia linha-a-linha.
 Depois disso, as tabelas brutas sao recriadas vazias em `rfb_import` para a proxima carga.
 
-Antes do `rename_swap`, o ETL executa auditoria seletiva dos campos configurados em
-`dados_rfb.controle_campo_monitorado`. Por padrao, `estabelecimento.situacao_cadastral`
-e monitorado para registrar historico de mudanca ativa/inativa em
-`dados_rfb.historico_campo_monitorado`. Essa auditoria so roda quando a tabela ja existe
-em `dados_rfb`; se a tabela final ainda nao existe, a promocao e feita como copia simples
-por `RENAME TABLE`, sem comparacao linha-a-linha.
+Antes do `rename_swap`, quando ja existe base anterior em `dados_rfb`, o ETL executa uma
+monitoracao especifica de negocio. Ela registra CNPJs novos, CNPJs que mudaram de ativo
+para inativo, CNPJs que mudaram de inativo para ativo e empresas cujos socios mudaram.
+Os detalhes ficam em `dados_rfb.monitoramento_cnpj_mudanca`; os totais ficam em
+`dados_rfb.resumo_monitoramento_cnpj` e tambem em `dados_rfb.controle_alteracao`.
 
 A estrategia antiga de copia em lotes continua disponivel com `DB_PROMOTION_STRATEGY=copy`.
 Nesse modo, se `dados_rfb` existir, compara tabela por tabela e registra em `controle_alteracao`:
@@ -139,7 +138,7 @@ Nesse modo, se `dados_rfb` existir, compara tabela por tabela e registra em `con
 - `tem alteracao`: houve divergencia de contagem/checksum;
 - `copiada`: tabela final nao existia e foi copiada.
 
-Por performance, a auditoria detalhada campo-a-campo fica limitada por configuracao e por padrao roda apenas em tabelas pequenas de dominio.
+Por performance, a comparacao pesada fica restrita a perguntas de negocio especificas, evitando auditoria generica campo-a-campo em tabelas grandes.
 
 ## Variaveis Principais
 
@@ -158,8 +157,6 @@ RAW_IMPORT_RESET_TABLES=True
 RAW_IMPORT_FAST_SCHEMA=True
 PROMOTE_RAW_IMPORT_AFTER_LOAD=True
 DB_PROMOTION_STRATEGY=rename_swap
-MONITORED_FIELDS_BOOTSTRAP_DEFAULTS=True
-MONITORED_FIELD_AUDIT_ENABLED=True
 CONTROL_DIFF_MAX_ROWS=1000
 CONTROL_DIFF_DETAIL_TABLES=cnae,moti,munic,natju,pais,quals
 DB_LOCAL_INFILE=True
@@ -167,10 +164,6 @@ DB_LOCAL_INFILE=True
 
 `APP_VERSION` e exibida no cabecalho inicial do log para facilitar auditoria da versao
 executada em producao.
-
-Para rodadas de performance em que o historico de campos monitorados pode ser adiado,
-defina `MONITORED_FIELD_AUDIT_ENABLED=False`. Isso evita a auditoria pesada de
-`estabelecimento.situacao_cadastral` durante a promocao.
 
 Para `LOAD DATA LOCAL INFILE`, o MariaDB tambem precisa estar com `local_infile=ON` no servidor.
 
