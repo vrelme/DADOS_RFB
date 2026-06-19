@@ -23,12 +23,39 @@ def quote_identifier(value: str) -> str:
 
 class RawImportPromotionRepository:
 
-    def __init__(self):
+    def __init__(self, progress_callback=None, progress_start=0, progress_end=100):
         self.import_db = Settings.ACTIVE_DB_NAME
         self.final_db = Settings.DB_NAME
         self.import_engine = self._create_promotion_engine(self.import_db)
         self.final_engine = self._create_promotion_engine(self.final_db)
         self.table_timings = {}
+        self.progress_callback = progress_callback
+        self.progress_start = float(progress_start)
+        self.progress_end = float(progress_end)
+        self._last_progress_percent = self.progress_start
+
+    def _report_progress(self, progress_percent=None, phase=None, table_name=None, detail=None):
+        if progress_percent is None:
+            progress_percent = self._last_progress_percent
+        else:
+            self._last_progress_percent = progress_percent
+
+        if not self.progress_callback:
+            return
+
+        self.progress_callback(
+            progress_percent=progress_percent,
+            phase=phase,
+            table_name=table_name,
+            detail=detail,
+        )
+
+    def _promotion_progress(self, completed_tables, total_tables, table_step=0):
+        total_tables = total_tables or 1
+        table_fraction = (completed_tables + table_step) / total_tables
+        return self.progress_start + (
+            (self.progress_end - self.progress_start) * table_fraction
+        )
 
     def _log_prefix(self, label: str) -> str:
         return f"{label:<20} |"
@@ -109,35 +136,76 @@ class RawImportPromotionRepository:
             f"{self._log_prefix('PROMOCAO')} iniciando troca de {total_tables} tabelas de "
             f"{self.import_db} -> {self.final_db}"
         )
-        
+
         for index, table in enumerate(RFB_TABLES, 1):
             progress_percent = (index / total_tables) * 100
+            completed_tables = index - 1
             existed = self._table_exists(self.final_db, table.table_name)
-            
-            logger.info(f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] ({index}/{total_tables}) ┌─ INICIO tabela '{table.table_name}'")
-            
+            self._report_progress(
+                progress_percent=self._promotion_progress(completed_tables, total_tables),
+                phase="PROMOTE_RAW_IMPORT",
+                table_name=table.table_name,
+                detail=f"Iniciando tabela {index}/{total_tables}",
+            )
+
+            logger.info(
+                f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] "
+                f"({index}/{total_tables}) INICIO tabela '{table.table_name}'"
+            )
+
             if existed:
-                # Etapa 1: Monitoracao de mudancas de negocio
-                logger.info(f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] ({index}/{total_tables}) │  ├─ INICIO monitoracao de mudancas")
+                self._report_progress(
+                    progress_percent=self._promotion_progress(completed_tables, total_tables, 0.15),
+                    phase="PROMOTE_RAW_IMPORT",
+                    table_name=table.table_name,
+                    detail="Monitorando CNPJs e socios antes do rename",
+                )
+                logger.info(
+                    f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] "
+                    f"({index}/{total_tables}) INICIO monitoracao de mudancas"
+                )
                 self._monitor_business_changes(table.table_name)
-                logger.info(f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] ({index}/{total_tables}) │  └─ FIM monitoracao de mudancas")
+                logger.info(
+                    f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] "
+                    f"({index}/{total_tables}) FIM monitoracao de mudancas"
+                )
             else:
                 logger.info(
-                    f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] ({index}/{total_tables}) │  ├─ "
-                    "Tabela inexistente no banco final; pulando monitoracao por nao haver base anterior"
+                    f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] "
+                    f"({index}/{total_tables}) Tabela inexistente no banco final; "
+                    "pulando monitoracao por nao haver base anterior"
                 )
                 logger.info(
-                    f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] ({index}/{total_tables}) │  └─ "
-                    "Promocao sera copia simples por RENAME TABLE"
+                    f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] "
+                    f"({index}/{total_tables}) Promocao sera copia simples por RENAME TABLE"
                 )
-            
-            # Etapa 2: Swap da tabela (RENAME)
-            logger.info(f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] ({index}/{total_tables}) │  ├─ INICIO swap/rename tabela")
+
+            self._report_progress(
+                progress_percent=self._promotion_progress(completed_tables, total_tables, 0.65),
+                phase="PROMOTE_RAW_IMPORT",
+                table_name=table.table_name,
+                detail="Executando swap/rename da tabela",
+            )
+            logger.info(
+                f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] "
+                f"({index}/{total_tables}) INICIO swap/rename tabela"
+            )
             self._swap_table_to_final(table.table_name)
-            logger.info(f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] ({index}/{total_tables}) │  └─ FIM swap/rename tabela")
-            
-            # Etapa 3: Inserção de controle
-            logger.info(f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] ({index}/{total_tables}) │  ├─ INICIO registro de controle")
+            logger.info(
+                f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] "
+                f"({index}/{total_tables}) FIM swap/rename tabela"
+            )
+
+            self._report_progress(
+                progress_percent=self._promotion_progress(completed_tables, total_tables, 0.9),
+                phase="PROMOTE_RAW_IMPORT",
+                table_name=table.table_name,
+                detail="Registrando controle da promocao",
+            )
+            logger.info(
+                f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] "
+                f"({index}/{total_tables}) INICIO registro de controle"
+            )
             with self.final_engine.begin() as conn:
                 status = "promovida" if existed else "copiada"
                 detail = (
@@ -148,10 +216,20 @@ class RawImportPromotionRepository:
                 if not existed:
                     detail += " Tabela final inexistente; monitoracao foi ignorada por nao haver base anterior."
                 self._insert_control(conn, table.table_name, status, detail)
-            logger.info(f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] ({index}/{total_tables}) │  └─ FIM registro de controle")
-            
             logger.info(
-                f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] ({index}/{total_tables}) └─ FIM tabela '{table.table_name}' {status}"
+                f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] "
+                f"({index}/{total_tables}) FIM registro de controle"
+            )
+
+            logger.info(
+                f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] "
+                f"({index}/{total_tables}) FIM tabela '{table.table_name}' {status}"
+            )
+            self._report_progress(
+                progress_percent=self._promotion_progress(index, total_tables),
+                phase="PROMOTE_RAW_IMPORT",
+                table_name=table.table_name,
+                detail=f"Tabela {index}/{total_tables} promovida",
             )
 
     def _swap_table_to_final(self, table_name):
@@ -438,6 +516,11 @@ class RawImportPromotionRepository:
             logger.info(
                 f"{self._log_prefix('MONITORAMENTO')} criando indice {database_name}.{table_name}.{index_name}"
             )
+            self._report_progress(
+                phase="PROMOTE_RAW_IMPORT",
+                table_name=table_name,
+                detail=f"Criando indice {database_name}.{table_name}.{index_name}",
+            )
             with self.final_engine.begin() as conn:
                 self._prepare_promotion_session(conn)
                 conn.execute(
@@ -446,6 +529,11 @@ class RawImportPromotionRepository:
                         f"ADD INDEX {quote_identifier(index_name)} ({columns_sql})"
                     )
                 )
+            self._report_progress(
+                phase="PROMOTE_RAW_IMPORT",
+                table_name=table_name,
+                detail=f"Indice criado {database_name}.{table_name}.{index_name}",
+            )
 
     def _index_exists(self, database_name, table_name, index_name):
         with self.final_engine.connect() as conn:

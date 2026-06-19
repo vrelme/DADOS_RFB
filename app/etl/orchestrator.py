@@ -126,21 +126,49 @@ class ETLOrchestrator:
         self._pipeline_started_at = None
         self._heartbeat_lock = threading.Lock()
         self._heartbeat_active = False
+        self._heartbeat_status_lock = threading.Lock()
+        self._heartbeat_status = {
+            "progress_percent": 0,
+            "phase": "INICIANDO",
+            "table_name": None,
+            "detail": "Preparando execucao",
+            "updated_at": time.time(),
+        }
 
     # =====================================================
     # HEARTBEAT
     # =====================================================
-    def _heartbeat(self):  # <- incluída no código
-
+    def _heartbeat(self):
         if self._heartbeat_active:
             return
         self._heartbeat_active = True
 
         while True:
-
+            status = self._heartbeat_status_snapshot()
+            elapsed_seconds = (
+                time.time() - self._pipeline_started_at
+                if self._pipeline_started_at
+                else 0
+            )
+            elapsed = (
+                format_duration(elapsed_seconds)
+                if elapsed_seconds
+                else "0s"
+            )
+            eta = self._heartbeat_eta(
+                elapsed_seconds,
+                status.get("progress_percent", 0),
+            )
+            table_part = (
+                f" | tabela={status['table_name']}"
+                if status.get("table_name")
+                else ""
+            )
             self.logger.info(
-                "HEARTBEAT            | ETL em execução..."
-                
+                "HEARTBEAT            | "
+                f"ETL em execucao... [{status['progress_percent']:6.2f}%] | "
+                f"fase={status['phase']}{table_part} | "
+                f"detalhe={status['detail']} | tempo={elapsed} | ETA={eta}"
             )
 
             if self.run_id and self._heartbeat_lock.acquire(blocking=False):
@@ -152,6 +180,41 @@ class ETLOrchestrator:
                     self._heartbeat_lock.release()
 
             time.sleep(60)
+
+    def _update_heartbeat_status(
+        self,
+        progress_percent=None,
+        phase=None,
+        table_name=None,
+        detail=None,
+    ):
+        with self._heartbeat_status_lock:
+            if progress_percent is not None:
+                self._heartbeat_status["progress_percent"] = max(
+                    0,
+                    min(100, float(progress_percent)),
+                )
+            if phase is not None:
+                self._heartbeat_status["phase"] = phase
+            if table_name is not None:
+                self._heartbeat_status["table_name"] = table_name
+            if detail is not None:
+                self._heartbeat_status["detail"] = detail
+            self._heartbeat_status["updated_at"] = time.time()
+
+    def _heartbeat_status_snapshot(self):
+        with self._heartbeat_status_lock:
+            return dict(self._heartbeat_status)
+
+    def _heartbeat_eta(self, elapsed_seconds, progress_percent):
+        progress_percent = float(progress_percent or 0)
+        if progress_percent <= 0:
+            return "calculando"
+        if progress_percent >= 100:
+            return "00:00.000"
+
+        remaining_seconds = elapsed_seconds * (100 - progress_percent) / progress_percent
+        return format_duration(remaining_seconds)
 
     # =====================================================
     # SYSTEM MONITOR
@@ -175,6 +238,11 @@ class ETLOrchestrator:
     # =====================================================
     def run(self):
         self._pipeline_started_at = time.time()
+        self._update_heartbeat_status(
+            progress_percent=0,
+            phase="START",
+            detail="Inicializando pipeline",
+        )
 
         self.logger.info("=" * 107)
         self.logger.info("RFB LOADER ENTERPRISE")
@@ -214,6 +282,11 @@ class ETLOrchestrator:
                 self._process_socio()
 
             self._finish_run("SUCCESS")
+            self._update_heartbeat_status(
+                progress_percent=100,
+                phase="SUCCESS",
+                detail="Pipeline finalizado",
+            )
             self._log_timing_summary()
 
             self.logger.info("=" * 107)
@@ -221,6 +294,10 @@ class ETLOrchestrator:
             self.logger.info("=" * 107)
 
         except Exception as exc:
+            self._update_heartbeat_status(
+                phase="FAILED",
+                detail=str(exc)[:300],
+            )
             self._finish_run("FAILED", str(exc))
             raise
 
@@ -331,20 +408,44 @@ class ETLOrchestrator:
                 "SYNC_STRATEGY=raw_import exige LOAD_STRATEGY=load_data para carga rápida."
             )
 
-        for table in RFB_TABLES:
+        total_tables = len(RFB_TABLES) or 1
+        for table_index, table in enumerate(RFB_TABLES, 1):
+            load_progress = ((table_index - 1) / total_tables) * 90
+            self._update_heartbeat_status(
+                progress_percent=load_progress,
+                phase=f"LOAD_{table.table_name.upper()}",
+                table_name=table.table_name,
+                detail=f"Iniciando tabela {table_index}/{total_tables}",
+            )
             self._process_rfb_table(table)
 
+        self._update_heartbeat_status(
+            progress_percent=90,
+            phase="VALIDATE_RAW_IMPORT",
+            table_name="controle_alteracao",
+            detail="Validando tabelas carregadas",
+        )
         self._validate_raw_import_loaded()
 
         if Settings.PROMOTE_RAW_IMPORT_AFTER_LOAD:
             phase = self._start_phase("PROMOTE_RAW_IMPORT", table_name="controle_alteracao")
             try:
+                self._update_heartbeat_status(
+                    progress_percent=90,
+                    phase="PROMOTE_RAW_IMPORT",
+                    table_name="controle_alteracao",
+                    detail=f"Promovendo {Settings.ACTIVE_DB_NAME} para {Settings.DB_NAME}",
+                )
                 self.logger.info("-" * 107)
                 self.logger.info(
                     f"PROMOVENDO {Settings.ACTIVE_DB_NAME} -> {Settings.DB_NAME}"
                 )
                 self.logger.info("-" * 107)
-                self._promotion_timings = RawImportPromotionRepository().promote()
+                self._promotion_timings = RawImportPromotionRepository(
+                    progress_callback=self._update_heartbeat_status,
+                    progress_start=90,
+                    progress_end=99,
+                ).promote()
             finally:
                 self._finish_phase(phase)
         self.logger.info(
@@ -354,6 +455,11 @@ class ETLOrchestrator:
 
     def _process_rfb_table(self, table):
         table_started_at = time.time()
+        self._update_heartbeat_status(
+            phase=f"LOAD_{table.table_name.upper()}",
+            table_name=table.table_name,
+            detail="Iniciando carga da tabela",
+        )
         self.logger.info("-" * 107)
         self.logger.info(f"PROCESSANDO {table.table_name.upper()}")
         self.logger.info("-" * 107)

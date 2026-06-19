@@ -23,6 +23,10 @@ def _repository_for_swap_test(table_exists):
     repo.final_db = "dados_rfb"
     repo.final_engine = _NoopEngine()
     repo.table_timings = {}
+    repo.progress_callback = None
+    repo.progress_start = 0
+    repo.progress_end = 100
+    repo._last_progress_percent = 0
     repo.monitor_calls = []
     repo.swap_calls = []
     repo.control_rows = []
