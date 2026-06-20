@@ -28,7 +28,7 @@ class Settings:
 
     DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 
-    LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+    LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO ")
 
     # =====================================================
     # DATABASE
