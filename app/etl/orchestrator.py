@@ -528,7 +528,7 @@ class ETLOrchestrator:
         if self._promotion_timings:
             for table_name, elapsed in self._promotion_timings.get("tables", {}).items():
                 self.logger.info(
-                    f"TEMPO                | promocao tabela {table_name}: {format_duration(elapsed)}"
+                    f"TEMPO                | {format_duration(elapsed)} : promocao tabela {table_name}"
                 )
             self.logger.info("-" * 107)
             self.logger.info(
