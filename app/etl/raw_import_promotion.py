@@ -9,7 +9,13 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import Settings
-from app.database import build_database_url, build_server_url, create_engine_for_database, mysql_connect_args
+from app.database import (
+    build_database_url,
+    build_server_url,
+    create_engine_for_database,
+    format_duration,
+    mysql_connect_args,
+)
 from app.etl.rfb_manifest import RFB_TABLES, RFB_TABLES_BY_NAME, raw_import_create_table_sql
 
 
@@ -59,6 +65,9 @@ class RawImportPromotionRepository:
 
     def _log_prefix(self, label: str) -> str:
         return f"{label:<20} |"
+
+    def _format_duration(self, seconds):
+        return format_duration(seconds)
 
     def _create_promotion_engine(self, database_name):
         connect_args = mysql_connect_args()
