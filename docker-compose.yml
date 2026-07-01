@@ -1,0 +1,70 @@
+services:
+  rfb-metrics-api:
+    image: python:3.12-slim
+    container_name: rfb-metrics-api
+    working_dir: /app
+    command: >
+      sh -c "pip install --no-cache-dir -r requirements/base.txt &&
+             uvicorn app.observability.metrics_app:app --host 0.0.0.0 --port 8000"
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      DB_HOST: host.docker.internal
+    volumes:
+      - .:/app
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: rfb-prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    depends_on:
+      - rfb-metrics-api
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: rfb-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: rfb-node-exporter
+    ports:
+      - "9100:9100"
+    restart: unless-stopped
+
+  mysql-exporter:
+    image: prom/mysqld-exporter:latest
+    container_name: rfb-mysql-exporter
+    ports:
+      - "9104:9104"
+    environment:
+      DATA_SOURCE_NAME: "${DB_USER}:${DB_PASSWORD}@(host.docker.internal:${DB_PORT})/"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+volumes:
+  prometheus-data:
+  grafana-data:

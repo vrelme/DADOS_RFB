@@ -311,6 +311,15 @@ class Settings:
         os.getenv("ENABLE_OTEL_TRACING", "False").lower() == "true"
     )
 
+    METRICS_COLLECTION_INTERVAL = int(
+        os.getenv("METRICS_COLLECTION_INTERVAL", 30)
+    )
+
+    METRICS_DATABASE_COUNTS_MODE = os.getenv(
+        "METRICS_DATABASE_COUNTS_MODE",
+        "estimate",
+    ).lower()
+
     # =====================================================
     # PERFORMANCE
     # =====================================================

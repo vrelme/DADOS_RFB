@@ -182,6 +182,179 @@ cd "F:\Repositorio\15_Git\RFB Loader Enterprise"
 python -m app.main
 ```
 
+## Observabilidade, Prometheus E Grafana
+
+A aplicacao de metricas roda separada do ETL principal e expoe endpoints para Prometheus e
+para paineis JSON:
+
+```powershell
+uvicorn app.observability.metrics_app:app --host 0.0.0.0 --port 8000
+```
+
+Endpoints disponiveis:
+
+```text
+GET /health
+GET /metrics
+GET /dashboard/overview
+GET /dashboard/performance
+GET /dashboard/database
+GET /dashboard/execution
+GET /dashboard/promotion
+GET /dashboard/audit
+```
+
+Configure o intervalo de coleta no `.env`:
+
+```env
+METRICS_COLLECTION_INTERVAL=30
+```
+
+Stack local:
+
+```powershell
+docker compose up -d prometheus grafana node-exporter mysql-exporter rfb-metrics-api
+```
+
+URLs padrao:
+
+```text
+Metrics API: http://localhost:8000
+Prometheus:  http://localhost:9090
+Grafana:     http://localhost:3000
+```
+
+No Grafana, cadastre o Prometheus em `http://prometheus:9090`.
+
+### Dashboard 1 - Visao Geral
+
+Cards sugeridos:
+
+```promql
+rfb_etl_last_execution_timestamp
+rfb_etl_last_execution_status
+rfb_etl_last_execution_duration_seconds
+rfb_etl_files_processed_total
+rfb_etl_records_processed_total
+rfb_etl_errors_total
+```
+
+### Dashboard 2 - Performance
+
+Graficos sugeridos:
+
+```promql
+rfb_etl_records_per_second
+rfb_etl_file_duration_seconds
+rfb_etl_stage_duration_seconds
+rfb_etl_merge_duration_seconds
+rfb_etl_rename_swap_duration_seconds
+```
+
+Labels principais: `pipeline`, `file_name`, `table_name`, `stage`, `status`.
+
+### Dashboard 3 - Banco De Dados
+
+Cards sugeridos:
+
+```promql
+rfb_db_empresa_total
+rfb_db_estabelecimento_total
+rfb_db_socio_total
+rfb_db_cnae_total
+rfb_db_municipio_total
+```
+
+### Dashboard 4 - Execucao
+
+Tabela e series por arquivo:
+
+```promql
+rfb_etl_execution_total
+rfb_etl_execution_duration_seconds
+rfb_etl_execution_records_total
+rfb_etl_execution_status_total
+```
+
+Labels principais: `pipeline`, `worker`, `file_name`, `status`, `table_name`.
+
+### Dashboard 5 - Promotion
+
+Promocoes e rename swap:
+
+```promql
+rfb_promotion_total
+rfb_promotion_rename_swap_total
+rfb_promotion_duration_seconds
+rfb_promotion_status_total
+```
+
+Labels principais: `table_name`, `strategy`, `status`.
+
+### Dashboard 6 - Auditoria
+
+Eventos de campos monitorados:
+
+```promql
+rfb_audit_fields_added_total
+rfb_audit_fields_removed_total
+rfb_audit_fields_changed_total
+rfb_audit_events_total
+```
+
+Labels principais: `table_name`, `field_name`, `event_type`.
+
+### Dashboard 7 - Infraestrutura
+
+Via Node Exporter:
+
+```promql
+100 - (avg by(instance)(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
+100 * (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes))
+100 * (1 - (node_filesystem_avail_bytes / node_filesystem_size_bytes))
+rate(node_network_receive_bytes_total[5m])
+rate(node_network_transmit_bytes_total[5m])
+```
+
+Metricas esperadas:
+
+```text
+node_cpu_seconds_total
+node_memory_MemAvailable_bytes
+node_filesystem_avail_bytes
+node_network_receive_bytes_total
+node_network_transmit_bytes_total
+```
+
+### Dashboard 8 - MySQL
+
+Via MySQL Exporter:
+
+```promql
+rate(mysql_global_status_queries[5m])
+mysql_global_status_threads_connected
+rate(mysql_global_status_innodb_row_lock_waits[5m])
+1 - (
+  rate(mysql_global_status_innodb_buffer_pool_reads[5m])
+  /
+  rate(mysql_global_status_innodb_buffer_pool_read_requests[5m])
+)
+rate(mysql_global_status_bytes_received[5m])
+rate(mysql_global_status_bytes_sent[5m])
+```
+
+Metricas esperadas:
+
+```text
+mysql_global_status_queries
+mysql_global_status_threads_connected
+mysql_global_status_innodb_row_lock_waits
+mysql_global_status_innodb_buffer_pool_reads
+mysql_global_status_innodb_buffer_pool_read_requests
+mysql_global_status_bytes_received
+mysql_global_status_bytes_sent
+```
+
 ## Documentacao
 
 - [Documentacao da aplicacao](docs/APPLICATION_DOCUMENTATION.md)
