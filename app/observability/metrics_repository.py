@@ -2,14 +2,17 @@ import logging
 from datetime import date, datetime, time
 from typing import Any, Dict, Iterable, List, Optional
 
+from sqlalchemy import bindparam, create_engine
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.pool import NullPool
 
 from app.config import Settings
 from app.database import (
     OperationalSessionLocal,
-    create_engine_for_database,
+    build_database_url,
     is_database_connection_lost,
+    mysql_connect_args,
 )
 from app.models import ETLExecution, ETLFileProgress, ETLMetric, ETLRun, ETLRunPhase
 
@@ -22,8 +25,23 @@ class MetricsRepository:
 
     def __init__(self):
         self.ops_session_factory = OperationalSessionLocal
-        self.final_engine = create_engine_for_database(Settings.DB_NAME)
+        self.final_engine = self._create_metrics_engine(Settings.DB_NAME)
         self._table_exists_cache: Dict[str, bool] = {}
+
+    def _create_metrics_engine(self, database_name: str):
+        timeout = max(1, Settings.METRICS_DB_QUERY_TIMEOUT)
+        return create_engine(
+            build_database_url(database_name),
+            echo=False,
+            future=True,
+            poolclass=NullPool,
+            pool_pre_ping=True,
+            connect_args=mysql_connect_args(
+                connect_timeout=timeout,
+                read_timeout=timeout,
+                write_timeout=timeout,
+            ),
+        )
 
     def get_overview_metrics(self) -> Dict[str, Any]:
         db = self.ops_session_factory()
@@ -154,13 +172,18 @@ class MetricsRepository:
             db.close()
 
     def get_database_counts(self) -> Dict[str, int]:
-        tables = {
-            "empresa_total": ("empresa",),
-            "estabelecimento_total": ("estabelecimento",),
-            "socio_total": ("socio",),
-            "cnae_total": ("cnae",),
-            "municipio_total": ("municipio", "munic"),
-        }
+        empty_counts = self._empty_database_counts()
+
+        if Settings.METRICS_DATABASE_COUNTS_MODE == "disabled":
+            return empty_counts
+
+        if Settings.METRICS_DATABASE_COUNTS_MODE != "exact":
+            estimated = self._estimated_database_counts()
+            if estimated is not None:
+                return estimated
+            return empty_counts
+
+        tables = self._database_count_tables()
         return {
             key: self._count_first_existing_table(*table_names)
             for key, table_names in tables.items()
@@ -310,12 +333,8 @@ class MetricsRepository:
             if not self._table_exists(Settings.DB_NAME, table_name):
                 continue
             try:
-                if Settings.METRICS_DATABASE_COUNTS_MODE != "exact":
-                    estimated = self._estimated_table_rows(Settings.DB_NAME, table_name)
-                    if estimated is not None:
-                        return estimated
-
                 with self.final_engine.connect() as conn:
+                    self._prepare_metrics_session(conn)
                     value = conn.execute(
                         text(f"SELECT COUNT(*) FROM `{table_name}`")
                     ).scalar()
@@ -328,6 +347,59 @@ class MetricsRepository:
                 )
                 return 0
         return 0
+
+    def _database_count_tables(self) -> Dict[str, tuple[str, ...]]:
+        return {
+            "empresa_total": ("empresa",),
+            "estabelecimento_total": ("estabelecimento",),
+            "socio_total": ("socio",),
+            "cnae_total": ("cnae",),
+            "municipio_total": ("municipio", "munic"),
+        }
+
+    def _empty_database_counts(self) -> Dict[str, int]:
+        return {key: 0 for key in self._database_count_tables()}
+
+    def _estimated_database_counts(self) -> Optional[Dict[str, int]]:
+        counts = self._empty_database_counts()
+        aliases = self._database_count_tables()
+        table_names = sorted({name for names in aliases.values() for name in names})
+
+        try:
+            with self.final_engine.connect() as conn:
+                self._prepare_metrics_session(conn)
+                rows = conn.execute(
+                    text(
+                        """
+                        SELECT TABLE_NAME, COALESCE(TABLE_ROWS, 0) AS table_rows
+                        FROM INFORMATION_SCHEMA.TABLES
+                        WHERE TABLE_SCHEMA = :schema_name
+                          AND TABLE_NAME IN :table_names
+                        """
+                    ).bindparams(bindparam("table_names", expanding=True)),
+                    {
+                        "schema_name": Settings.DB_NAME,
+                        "table_names": table_names,
+                    },
+                ).mappings().all()
+
+            rows_by_table = {
+                str(row["TABLE_NAME"]): int(row["table_rows"] or 0)
+                for row in rows
+            }
+            for metric_name, candidates in aliases.items():
+                for table_name in candidates:
+                    if table_name in rows_by_table:
+                        counts[metric_name] = rows_by_table[table_name]
+                        break
+            return counts
+        except SQLAlchemyError as exc:
+            self._handle_sqlalchemy_error(
+                exc,
+                "Erro ao estimar contagens do schema %s",
+                Settings.DB_NAME,
+            )
+            return None
 
     def _latest_promotion_duration(self) -> float:
         db = self.ops_session_factory()
@@ -355,6 +427,7 @@ class MetricsRepository:
 
         try:
             with self.final_engine.connect() as conn:
+                self._prepare_metrics_session(conn)
                 row = conn.execute(
                     text(
                         """
@@ -378,33 +451,10 @@ class MetricsRepository:
             )
             return False
 
-    def _estimated_table_rows(self, schema_name: str, table_name: str) -> Optional[int]:
-        try:
-            with self.final_engine.connect() as conn:
-                value = conn.execute(
-                    text(
-                        """
-                        SELECT TABLE_ROWS
-                        FROM INFORMATION_SCHEMA.TABLES
-                        WHERE TABLE_SCHEMA = :schema_name
-                          AND TABLE_NAME = :table_name
-                        """
-                    ),
-                    {"schema_name": schema_name, "table_name": table_name},
-                ).scalar()
-            return int(value or 0)
-        except SQLAlchemyError as exc:
-            self._handle_sqlalchemy_error(
-                exc,
-                "Erro ao estimar linhas da tabela %s.%s",
-                schema_name,
-                table_name,
-            )
-            return None
-
     def _table_columns(self, schema_name: str, table_name: str) -> List[str]:
         try:
             with self.final_engine.connect() as conn:
+                self._prepare_metrics_session(conn)
                 rows = conn.execute(
                     text(
                         """
@@ -425,6 +475,16 @@ class MetricsRepository:
                 table_name,
             )
             return []
+
+    def _prepare_metrics_session(self, conn) -> None:
+        timeout = max(1, Settings.METRICS_DB_QUERY_TIMEOUT)
+        try:
+            conn.execute(text(f"SET SESSION lock_wait_timeout = {timeout}"))
+            conn.execute(text(f"SET SESSION wait_timeout = {timeout + 5}"))
+            conn.execute(text(f"SET SESSION net_read_timeout = {timeout}"))
+            conn.execute(text(f"SET SESSION net_write_timeout = {timeout}"))
+        except SQLAlchemyError:
+            logger.debug("Nao foi possivel ajustar timeouts da sessao de metricas")
 
     def _handle_sqlalchemy_error(self, exc: SQLAlchemyError, message: str, *args: Any) -> None:
         if is_database_connection_lost(exc):

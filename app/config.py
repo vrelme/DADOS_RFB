@@ -320,6 +320,10 @@ class Settings:
         "estimate",
     ).lower()
 
+    METRICS_DB_QUERY_TIMEOUT = int(
+        os.getenv("METRICS_DB_QUERY_TIMEOUT", 5)
+    )
+
     # =====================================================
     # PERFORMANCE
     # =====================================================
