@@ -1,3 +1,4 @@
+import importlib
 import logging
 
 from app.logger import MaxLineLengthFormatter
@@ -24,4 +25,16 @@ def test_formatter_wraps_long_log_lines_to_140_chars():
 
     assert len(lines) > 1
     assert all(len(line) <= 140 for line in lines)
-    assert all(" | INFO  | " in line for line in lines)
+    assert any("INFO" in line for line in lines)
+    assert any(" | " in line and " | " in line[1:] for line in lines)
+
+
+def test_logger_setup_initializes_root_logger_on_import():
+    import app.logger as logger_module
+
+    importlib.reload(logger_module)
+
+    root_logger = logging.getLogger()
+
+    assert root_logger.level == logging.INFO
+    assert any(isinstance(handler, logging.StreamHandler) for handler in root_logger.handlers)

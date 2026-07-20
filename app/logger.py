@@ -10,7 +10,12 @@ class MaxLineLengthFormatter(logging.Formatter):
         self.max_line_length = max_line_length
 
     def format(self, record):
-        formatted = super().format(record)
+        original_levelname = record.levelname
+        record.levelname = f"{record.levelname:^10}"
+        try:
+            formatted = super().format(record)
+        finally:
+            record.levelname = original_levelname
         return "\n".join(
             self._wrap_line(line)
             for line in formatted.splitlines()
@@ -38,10 +43,15 @@ class MaxLineLengthFormatter(logging.Formatter):
 
 
 def setup_logger():
+    logging.addLevelName(logging.INFO, "INFO")
+    logging.addLevelName(logging.WARNING, "AVISO")
+    logging.addLevelName(logging.ERROR, "ERRO")
+    logging.addLevelName(logging.CRITICAL, "CRÍTICO")
+
     Settings.LOG_DIR.mkdir(parents=True, exist_ok=True)
 
     logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
+    logger.setLevel(getattr(logging, Settings.LOG_LEVEL.upper(), logging.INFO))
     logger.handlers.clear()
 
     formatter = MaxLineLengthFormatter(

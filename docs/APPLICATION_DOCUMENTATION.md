@@ -247,7 +247,10 @@ Arquivo separado: [architecture.mmd](diagrams/architecture.mmd)
 ```mermaid
 flowchart TD
     Start["Início: python -m app.main"] --> Env["Carrega .env e valida diretórios"]
-    Env --> Files["Valida arquivos em INPUT_DIR"]
+    Env --> Zip["Processa arquivos .zip em INPUT_DIR"]
+    Zip --> Staging["Copia conteúdo para INPUT_DIR\\arquivos"]
+    Staging --> Extract["Copia arquivos extraídos para EXTRACT_DIR"]
+    Extract --> Files["Valida arquivos em INPUT_DIR e EXTRACT_DIR"]
     Files --> CreateDB["Cria tabelas ORM se necessário"]
     CreateDB --> Empresa["Processa empresa"]
     Empresa --> Estab["Processa estabelecimento"]

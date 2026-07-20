@@ -64,12 +64,13 @@ empresa | FIM LEITURA | K3241.K03200Y0.D60411.EMPRECSV | ... registros
 ## Fluxo Atual
 
 1. Valida diretorios e arquivos de entrada.
-2. Cria/verifica `rfb_import`, `dados_rfb_ops` e, na promocao, `dados_rfb`.
-3. Cria tabelas raw em `rfb_import` sem indices/PK para carga rapida.
-4. Carrega todos os arquivos RFB com `LOAD DATA LOCAL INFILE`.
-5. Registra progresso, metricas, checkpoint e falhas em `dados_rfb_ops`.
-6. Se a carga bruta terminar com sucesso, promove dados de `rfb_import` para `dados_rfb`.
-7. Registra resultado da comparacao em `dados_rfb.controle_alteracao`.
+2. Localiza arquivos `.zip` em `H:\operacao\INPUT_FILES`, extrai o conteúdo para `H:\operacao\INPUT_FILES\arquivos` e, em seguida, copia os arquivos extraídos para `H:\operacao\extracted_files`.
+3. Cria/verifica `rfb_import`, `dados_rfb_ops` e, na promocao, `dados_rfb`.
+4. Cria tabelas raw em `rfb_import` sem indices/PK para carga rapida.
+5. Carrega todos os arquivos RFB com `LOAD DATA LOCAL INFILE`.
+6. Registra progresso, metricas, checkpoint e falhas em `dados_rfb_ops`.
+7. Se a carga bruta terminar com sucesso, promove dados de `rfb_import` para `dados_rfb`.
+8. Registra resultado da comparacao em `dados_rfb.controle_alteracao`.
 
 ## Tabelas Brutas
 

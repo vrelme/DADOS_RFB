@@ -1,4 +1,5 @@
 import time
+import urllib.parse
 
 from sqlalchemy import create_engine
 from sqlalchemy.exc import SQLAlchemyError
@@ -8,10 +9,15 @@ from sqlalchemy.pool import NullPool
 
 from app.config import Settings
 
+
+def _quote_component(value):
+    return urllib.parse.quote(str(value), safe="")
+
+
 def build_server_url():
     return (
         f"{Settings.DB_DRIVER}://"
-        f"{Settings.DB_USER}:{Settings.DB_PASSWORD}"
+        f"{_quote_component(Settings.DB_USER)}:{_quote_component(Settings.DB_PASSWORD)}"
         f"@{Settings.DB_HOST}:{Settings.DB_PORT}/"
         f"?charset={Settings.DB_CHARSET}"
     )
@@ -21,7 +27,7 @@ def build_database_url(database_name=None):
     db_name = database_name or Settings.ACTIVE_DB_NAME
     return (
         f"{Settings.DB_DRIVER}://"
-        f"{Settings.DB_USER}:{Settings.DB_PASSWORD}"
+        f"{_quote_component(Settings.DB_USER)}:{_quote_component(Settings.DB_PASSWORD)}"
         f"@{Settings.DB_HOST}:{Settings.DB_PORT}/{db_name}"
         f"?charset={Settings.DB_CHARSET}"
     )

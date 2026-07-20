@@ -10,19 +10,6 @@ from app.database import engine
 from app.models import Base
 from app.config import Settings
 
-
-# =====================================================
-# LOGGING
-# =====================================================
-logging.addLevelName(logging.info, "INFO")
-logging.addLevelName(logging.warning, "AVISO")
-logging.addLevelName(logging.error, "ERRO")
-logging.addLevelName(logging.critical, "CRÍTICO")
-logging.basicConfig(
-    level=getattr(logging, Settings.LOG_LEVEL),
-    format='{asctime} | {levelname:^10} | {message}'
-)
-
 logger = logging.getLogger(__name__)
 
 
@@ -54,15 +41,15 @@ def show_tables():
 
     tables = inspector.get_table_names()
 
-    logger.info("=" * 107)
+    logger.info("=" * 101)
     logger.info("TABELAS ENCONTRADAS")
-    logger.info("=" * 107)
+    logger.info("=" * 101)
 
     for table in sorted(tables):
 
         logger.info(f"✔ {table}")
 
-    logger.info("=" * 107)
+    logger.info("=" * 101)
 
 
 # =====================================================
@@ -159,10 +146,10 @@ def create_directories():
 # =====================================================
 def create_tables():
 
-    logger.info("=" * 107)
+    logger.info("=" * 101)
     logger.info(f"{Settings.APP_NAME}")
     logger.info("CREATE TABLES ENTERPRISE")
-    logger.info("=" * 107)
+    logger.info("=" * 101)
 
     try:
 
@@ -191,15 +178,15 @@ def create_tables():
         # =============================================
         show_tables()
 
-        logger.info("=" * 107)
+        logger.info("=" * 101)
         logger.info("ESTRUTURA CRIADA COM SUCESSO")
-        logger.info("=" * 107)
+        logger.info("=" * 101)
 
     except Exception as e:
 
-        logger.error("=" * 107)
+        logger.error("=" * 101)
         logger.error("ERRO CRÍTICO CREATE TABLES")
-        logger.error("=" * 107)
+        logger.error("=" * 101)
 
         logger.error(str(e))
 

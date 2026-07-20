@@ -227,8 +227,6 @@ class BulkRepository:
 
             logger.info(
                 f"{table_name:<21}| FIM LEITURA | "
-                f"{file_path.name} | {rows} registros | "
-                f"{elapsed}s | {rps} reg/s"
             )
 
             return rows

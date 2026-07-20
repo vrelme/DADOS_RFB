@@ -120,13 +120,9 @@ class Settings:
     # CONNECTION POOL
     # =====================================================
     DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", 20))
-
     DB_MAX_OVERFLOW = int(os.getenv("DB_MAX_OVERFLOW", 40))
-
     DB_POOL_RECYCLE = int(os.getenv("DB_POOL_RECYCLE", 3600))
-
     DB_POOL_TIMEOUT = int(os.getenv("DB_POOL_TIMEOUT", 30))
-
     DB_POOL_PRE_PING = (
         os.getenv("DB_POOL_PRE_PING", "True").lower() == "true"
     )
@@ -138,11 +134,8 @@ class Settings:
     DB_CONNECT_TIMEOUT = int(os.getenv("DB_CONNECT_TIMEOUT", 30))
 
     DB_HEALTH_CHECK_TIMEOUT = int(os.getenv("DB_HEALTH_CHECK_TIMEOUT", 5))
-
     DB_READ_TIMEOUT = int(os.getenv("DB_READ_TIMEOUT", 600))
-
     DB_WRITE_TIMEOUT = int(os.getenv("DB_WRITE_TIMEOUT", 600))
-
     DB_PROMOTION_READ_TIMEOUT = int(
         os.getenv("DB_PROMOTION_READ_TIMEOUT", 14400)
     )
@@ -164,9 +157,7 @@ class Settings:
     ).lower()
 
     DB_CREATE_RETRIES = int(os.getenv("DB_CREATE_RETRIES", 5))
-
     DB_CREATE_RETRY_DELAY = int(os.getenv("DB_CREATE_RETRY_DELAY", 10))
-
     RAW_IMPORT_RESET_TABLES = (
         os.getenv("RAW_IMPORT_RESET_TABLES", "True").lower() == "true"
     )
@@ -198,19 +189,14 @@ class Settings:
     # ETL
     # =====================================================
     CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", 50000))
-
     BATCH_SIZE = int(os.getenv("BATCH_SIZE", 5000))
-
     MAX_WORKERS = int(os.getenv("MAX_WORKERS", 4))
-
     ENABLE_PARALLELISM = (
         os.getenv("ENABLE_PARALLELISM", "True").lower() == "true"
     )
 
     LOAD_STRATEGY = os.getenv("LOAD_STRATEGY", "load_data").lower()
-
     MERGE_STRATEGY = os.getenv("MERGE_STRATEGY", "full_refresh").lower()
-
     # staging: carrega staging e depois faz merge; final: carrega direto nas tabelas finais.
     LOAD_TARGET = os.getenv(
         "LOAD_TARGET",
