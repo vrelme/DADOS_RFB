@@ -1,6 +1,6 @@
 # Dados Publicos CNPJ - RFB Loader Enterprise
 
-Processo ETL para carga dos dados publicos do CNPJ disponibilizados pela Receita Federal do Brasil em MariaDB.
+Processo ETL para carga dos dados publicos do CNPJ disponibilizados pela Receita Federal do Brasil (https://dados.gov.br/dados/conjuntos-dados/cadastro-nacional-da-pessoa-juridica---cnpj) (https://arquivos.receitafederal.gov.br/index.php/s/YggdBLfdninEJX9) em MariaDB.
 
 Fonte oficial e layout dos arquivos: [metadados da RFB](https://www.gov.br/receitafederal/dados/cnpj-metadados.pdf).
 

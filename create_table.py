@@ -14,9 +14,13 @@ from app.config import Settings
 # =====================================================
 # LOGGING
 # =====================================================
+logging.addLevelName(logging.info, "INFO")
+logging.addLevelName(logging.warning, "AVISO")
+logging.addLevelName(logging.error, "ERRO")
+logging.addLevelName(logging.critical, "CRÍTICO")
 logging.basicConfig(
     level=getattr(logging, Settings.LOG_LEVEL),
-    format="%(asctime)s | %(levelname)s | %(message)s"
+    format='{asctime} | {levelname:^10} | {message}'
 )
 
 logger = logging.getLogger(__name__)

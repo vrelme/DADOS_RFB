@@ -24,4 +24,4 @@ def test_formatter_wraps_long_log_lines_to_140_chars():
 
     assert len(lines) > 1
     assert all(len(line) <= 140 for line in lines)
-    assert all(" | INFO | " in line for line in lines)
+    assert all(" | INFO  | " in line for line in lines)
