@@ -73,10 +73,11 @@ def mysql_error_code(error):
     return None
 
 
-def is_database_connection_lost(error):
-    wrapped = getattr(error, "original_exception", None)
-    if wrapped is not None and is_database_connection_lost(wrapped):
-        return True
+def is_database_connection_lost(error, _seen=None):
+    _seen = _seen or set()
+    if error is None or id(error) in _seen:
+        return False
+    _seen.add(id(error))
 
     code = mysql_error_code(error)
     if code in {2003, 2006, 2013, 2014, 2055}:
@@ -93,8 +94,22 @@ def is_database_connection_lost(error):
         "broken pipe",
         "pymysql.err.operationalerror",
         "during query",
+        "'nonetype' object has no attribute 'settimeout'",
     )
-    return any(marker in message for marker in markers)
+    if any(marker in message for marker in markers):
+        return True
+
+    related = (
+        getattr(error, "original_exception", None),
+        getattr(error, "orig", None),
+        getattr(error, "__cause__", None),
+        getattr(error, "__context__", None),
+    )
+    return any(
+        is_database_connection_lost(item, _seen)
+        for item in related
+        if item is not None
+    )
 
 
 def format_duration(seconds):

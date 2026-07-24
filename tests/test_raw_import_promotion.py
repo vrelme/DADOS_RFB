@@ -61,3 +61,19 @@ def test_rename_swap_monitors_when_final_table_exists(monkeypatch):
     assert repo.monitor_calls == ["empresa"]
     assert repo.swap_calls == ["empresa"]
     assert repo.control_rows[0][1] == "promovida"
+
+
+def test_rename_swap_resume_skips_table_already_promoted(monkeypatch):
+    table = SimpleNamespace(table_name="empresa")
+    monkeypatch.setattr(raw_import_promotion, "RFB_TABLES", [table])
+    repo = _repository_for_swap_test(table_exists=True)
+    repo.resume_mode = True
+    repo.recreated = []
+    repo._table_was_already_swapped = lambda table_name: True
+    repo._recreate_import_table = lambda table_name: repo.recreated.append(table_name)
+
+    repo._swap_all_tables_to_final()
+
+    assert repo.monitor_calls == []
+    assert repo.swap_calls == []
+    assert repo.recreated == ["empresa"]

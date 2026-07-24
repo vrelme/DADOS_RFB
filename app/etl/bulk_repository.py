@@ -226,7 +226,7 @@ class BulkRepository:
             rps = int(rows / elapsed) if elapsed > 0 else 0
 
             logger.info(
-                f"{table_name:<21}| FIM LEITURA | "
+                f"{table_name:<21}| FIM LEITURA    | "
             )
 
             return rows
@@ -237,6 +237,11 @@ class BulkRepository:
                 f"Erro LOAD DATA {table_name} "
                 f"({file_path.name}): {e}",
                 exc_info=True
+            )
+            error_logger = logging.getLogger("error_detail")
+            error_logger.error(
+                f"LOAD DATA | causa provável | tabela={table_name} | arquivo={file_path.name} | "
+                f"erro={e}"
             )
             raise self._database_operation_error(
                 operation="LOAD DATA",
@@ -312,6 +317,12 @@ class BulkRepository:
                 "LOAD DATA LOCAL INFILE está desabilitado no cliente ou no "
                 "servidor. Habilite local_infile no MySQL/MariaDB e mantenha "
                 "DB_LOCAL_INFILE=True no .env."
+            )
+        elif code == 1114:
+            message = (
+                "A tabela atingiu o limite de espaço do MySQL/MariaDB. "
+                "Verifique o espaço disponível no disco, o tamanho das tabelas "
+                "e considere liberar espaço ou expandir o volume do banco."
             )
         else:
             message = (

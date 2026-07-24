@@ -50,8 +50,9 @@ class RawImportPromotionRepository:
             connect_args=connect_args,
         )
 
-    def promote(self):
+    def promote(self, resume=False):
         started_at = time.time()
+        self.resume_mode = resume
         existed = self._database_exists(self.final_db)
         self._ensure_database(self.final_db)
         self._ensure_control_table()
@@ -112,6 +113,18 @@ class RawImportPromotionRepository:
         
         for index, table in enumerate(RFB_TABLES, 1):
             progress_percent = (index / total_tables) * 100
+            if (
+                getattr(self, "resume_mode", False)
+                and self._table_was_already_swapped(table.table_name)
+            ):
+                logger.info(
+                    f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] "
+                    f"({index}/{total_tables}) tabela '{table.table_name}' "
+                    "ja promovida; retomada segue para a proxima"
+                )
+                self._recreate_import_table(table.table_name)
+                continue
+
             existed = self._table_exists(self.final_db, table.table_name)
             
             logger.info(f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] ({index}/{total_tables}) ┌─ INICIO tabela '{table.table_name}'")
@@ -153,6 +166,21 @@ class RawImportPromotionRepository:
             logger.info(
                 f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] ({index}/{total_tables}) └─ FIM tabela '{table.table_name}' {status}"
             )
+
+    def _table_was_already_swapped(self, table_name):
+        if not self._table_exists(self.final_db, table_name):
+            return False
+        if not self._table_exists(self.import_db, table_name):
+            return True
+
+        import_table = (
+            f"{quote_identifier(self.import_db)}."
+            f"{quote_identifier(table_name)}"
+        )
+        with self.import_engine.connect() as conn:
+            return conn.execute(
+                text(f"SELECT 1 FROM {import_table} LIMIT 1")
+            ).first() is None
 
     def _swap_table_to_final(self, table_name):
         started_at = time.time()

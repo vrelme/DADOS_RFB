@@ -238,7 +238,7 @@ def execute_with_database_recovery(logger, operation_name, operation):
         try:
             return operation()
 
-        except (SQLAlchemyError, DatabaseOperationError) as exc:
+        except Exception as exc:
             if not (
                 Settings.DB_RECOVERY_ENABLED
                 and is_database_connection_lost(exc)
