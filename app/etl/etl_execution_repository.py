@@ -50,7 +50,7 @@ class ETLExecutionRepository:
             texto = f"id={execution.id}"
             logger.info(
                 f"ETL STARTED          | "
-                f"{texto:<15} | "
+                f"{texto:<14} | "
                 f"file={file_name}"
             )
 
