@@ -183,6 +183,54 @@ cd "F:\Repositorio\15_Git\RFB Loader Enterprise"
 python -m app.main
 ```
 
+## API De Consulta CNPJ
+
+A API permite que aplicacoes externas consultem um CNPJ na base final da RFB e recebam se
+o estabelecimento esta ativo e qual e o logradouro cadastrado.
+
+Instale as dependencias e inicie o servidor:
+
+```powershell
+pip install -r requirements/base.txt
+uvicorn app.api:app --host 0.0.0.0 --port 8000
+```
+
+Se o banco consultavel se chamar `db_RFB`, configure a aplicacao para apontar para ele antes
+de iniciar a API:
+
+```env
+DB_NAME=db_RFB
+RFB_ACTIVE_DB_NAME=db_RFB
+```
+
+Consulta por GET:
+
+```text
+GET http://localhost:8000/api/v1/cnpj/12345678000195
+```
+
+Consulta por POST:
+
+```http
+POST /api/v1/cnpj
+Content-Type: application/json
+
+{"cnpj": "12.345.678/0001-95"}
+```
+
+Resposta:
+
+```json
+{
+  "cnpj": "12345678000195",
+  "ativo": true,
+  "logradouro": "Rua das Flores",
+  "situacao_cadastral": "02"
+}
+```
+
+O campo `ativo` considera a situacao cadastral `02` como ativa, conforme o layout da RFB.
+
 ## Documentacao
 
 - [Documentacao da aplicacao](docs/APPLICATION_DOCUMENTATION.md)
