@@ -263,9 +263,9 @@ class MergeRepository:
     # =====================================================
     def execute_all_merges(self):
 
-        logger.info("=" * 107)
+        logger.info("=" * 101)
         logger.info("INICIANDO PROCESSO DE MERGE")
-        logger.info("=" * 107)
+        logger.info("=" * 101)
 
         self.merge_empresa()
         self.merge_estabelecimento()
@@ -273,6 +273,6 @@ class MergeRepository:
 
         self.truncate_staging()
 
-        logger.info("=" * 107)
+        logger.info("=" * 101)
         logger.info("MERGE FINALIZADO")
-        logger.info("=" * 107)
+        logger.info("=" * 101)

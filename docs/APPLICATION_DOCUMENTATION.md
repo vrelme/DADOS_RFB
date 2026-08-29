@@ -106,52 +106,41 @@ CONTROL_DIFF_DETAIL_TABLES=cnae,moti,munic,natju,pais,quals
 CONTROL_DIFF_MAX_ROWS=1000
 ```
 
-### Auditoria Seletiva De Campos
+### Monitoracao De Mudancas De CNPJ E Socios
 
-Para manter historico de mudancas importantes sem comparar todos os campos das tabelas grandes, o ETL usa auditoria seletiva.
+Para responder as perguntas operacionais principais sem comparar todos os campos das tabelas grandes, o ETL executa uma monitoracao especifica antes do `rename_swap`, somente quando ja existe base anterior em `dados_rfb`.
 
 Tabelas envolvidas:
 
 ```text
-controle_campo_monitorado  -> configuracao administrada no banco
-estado_campo_monitorado    -> ultimo valor conhecido por chave/campo
-historico_campo_monitorado -> alteracoes detectadas por execucao mensal
+monitoramento_cnpj_mudanca -> detalhes de CNPJs novos, ativados, inativados e socios alterados
+resumo_monitoramento_cnpj   -> totais por execucao e tabela de origem
+controle_alteracao          -> resumo textual registrado durante a promocao
 ```
 
-Fluxo:
-
-1. O administrador cadastra em `controle_campo_monitorado` os campos que devem ser auditados.
-2. Antes do `rename_swap`, o ETL compara o novo `rfb_import` com `estado_campo_monitorado`.
-3. Quando o valor muda, grava uma linha em `historico_campo_monitorado`.
-4. Depois atualiza `estado_campo_monitorado` com os valores do arquivo novo.
-5. Em seguida executa o `rename_swap`.
-
-Campo padrao criado na primeira execucao:
+Eventos registrados em `monitoramento_cnpj_mudanca`:
 
 ```text
-estabelecimento.situacao_cadastral
+cnpj_novo        -> existe em rfb_import.estabelecimento e nao existia em dados_rfb.estabelecimento
+cnpj_ativado     -> situacao anterior diferente de 02 e situacao nova igual a 02
+cnpj_inativado   -> situacao anterior igual a 02 e situacao nova diferente de 02
+socios_alterados -> quantidade ou hash dos dados de socios mudou para o cnpj_basico
 ```
 
-Esse campo permite consultar quando um estabelecimento mudou de situacao, por exemplo de ativo para inativo e depois para ativo novamente.
+O codigo `02` representa estabelecimento ativo nos dados da Receita Federal. A comparacao usa `cnpj_basico`, `cnpj_ordem` e `cnpj_dv` para estabelecimento, e `cnpj_basico` para resumo de socios.
 
-Exemplo de inclusao de campo monitorado pelo administrador:
+Consultas uteis:
 
 ```sql
-INSERT INTO dados_rfb.controle_campo_monitorado (tabela, campo, ativo, observacao)
-VALUES ('estabelecimento', 'motivo_situacao_cadastral', 1, 'Auditar motivo de alteracao cadastral')
-ON DUPLICATE KEY UPDATE ativo = VALUES(ativo), observacao = VALUES(observacao);
+SELECT *
+FROM dados_rfb.resumo_monitoramento_cnpj
+ORDER BY id DESC;
+
+SELECT tipo_evento, COUNT(*)
+FROM dados_rfb.monitoramento_cnpj_mudanca
+WHERE data_movimento = CURRENT_DATE
+GROUP BY tipo_evento;
 ```
-
-Recomendacao de permissao:
-
-```sql
-REVOKE INSERT, UPDATE, DELETE ON dados_rfb.controle_campo_monitorado FROM 'usuario_app'@'%';
-GRANT SELECT ON dados_rfb.controle_campo_monitorado TO 'usuario_app'@'%';
-```
-
-O usuario operacional da aplicacao precisa criar as tabelas na primeira execucao. Em ambiente controlado, apos a criacao inicial, a alteracao da configuracao deve ficar restrita ao administrador.
-Depois de cadastrar os campos definitivos e restringir permissao de escrita, use `MONITORED_FIELDS_BOOTSTRAP_DEFAULTS=False` para evitar tentativas de bootstrap pelo ETL.
-
 ### Banco Operacional
 
 O banco `dados_rfb_ops` guarda status, progresso, checkpoint e metricas:
@@ -212,7 +201,7 @@ python -m app.main
 Configuração recomendada para carga completa:
 
 ```env
-APP_VERSION=V3.0.0
+APP_VERSION=V3.1.0
 LOAD_STRATEGY=load_data
 MERGE_STRATEGY=full_refresh
 DB_LOCAL_INFILE=True
@@ -221,11 +210,6 @@ MAX_WORKERS=4
 
 `APP_VERSION` deve ser mantida no `.env` pelo analista responsavel pela implantacao.
 Na inicializacao, o valor e registrado no cabecalho do log junto com o nome da aplicacao.
-
-Para reduzir carga no MariaDB em janelas de importacao grandes, `MONITORED_FIELD_AUDIT_ENABLED=False`
-desliga temporariamente a auditoria dos campos configurados em `controle_campo_monitorado`.
-Use essa opcao quando a prioridade for concluir a carga/promocao e o historico detalhado
-puder ser processado em outro momento.
 
 Para o `LOAD DATA LOCAL INFILE` funcionar, o MariaDB precisa estar com `local_infile` habilitado no cliente e no servidor:
 
@@ -263,7 +247,10 @@ Arquivo separado: [architecture.mmd](diagrams/architecture.mmd)
 ```mermaid
 flowchart TD
     Start["Início: python -m app.main"] --> Env["Carrega .env e valida diretórios"]
-    Env --> Files["Valida arquivos em INPUT_DIR"]
+    Env --> Zip["Processa arquivos .zip em INPUT_DIR"]
+    Zip --> Staging["Copia conteúdo para INPUT_DIR\\arquivos"]
+    Staging --> Extract["Copia arquivos extraídos para EXTRACT_DIR"]
+    Extract --> Files["Valida arquivos em INPUT_DIR e EXTRACT_DIR"]
     Files --> CreateDB["Cria tabelas ORM se necessário"]
     CreateDB --> Empresa["Processa empresa"]
     Empresa --> Estab["Processa estabelecimento"]

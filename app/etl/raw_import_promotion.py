@@ -1,7 +1,6 @@
 # app/etl/raw_import_promotion.py
 
 import logging
-
 import time
 
 from datetime import datetime
@@ -51,8 +50,9 @@ class RawImportPromotionRepository:
             connect_args=connect_args,
         )
 
-    def promote(self):
+    def promote(self, resume=False):
         started_at = time.time()
+        self.resume_mode = resume
         existed = self._database_exists(self.final_db)
         self._ensure_database(self.final_db)
         self._ensure_control_table()
@@ -113,19 +113,31 @@ class RawImportPromotionRepository:
         
         for index, table in enumerate(RFB_TABLES, 1):
             progress_percent = (index / total_tables) * 100
+            if (
+                getattr(self, "resume_mode", False)
+                and self._table_was_already_swapped(table.table_name)
+            ):
+                logger.info(
+                    f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] "
+                    f"({index}/{total_tables}) tabela '{table.table_name}' "
+                    "ja promovida; retomada segue para a proxima"
+                )
+                self._recreate_import_table(table.table_name)
+                continue
+
             existed = self._table_exists(self.final_db, table.table_name)
             
             logger.info(f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] ({index}/{total_tables}) ┌─ INICIO tabela '{table.table_name}'")
             
             if existed:
-                # Etapa 1: Auditoria de campos monitorados
-                logger.info(f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] ({index}/{total_tables}) │  ├─ INICIO auditoria campos monitorados")
-                self._audit_monitored_fields(table.table_name)
-                logger.info(f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] ({index}/{total_tables}) │  └─ FIM auditoria campos monitorados")
+                # Etapa 1: Monitoracao de mudancas de negocio
+                logger.info(f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] ({index}/{total_tables}) │  ├─ INICIO monitoracao de mudancas")
+                self._monitor_business_changes(table.table_name)
+                logger.info(f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] ({index}/{total_tables}) │  └─ FIM monitoracao de mudancas")
             else:
                 logger.info(
                     f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] ({index}/{total_tables}) │  ├─ "
-                    "Tabela inexistente no banco final; pulando comparacao/auditoria linha-a-linha"
+                    "Tabela inexistente no banco final; pulando monitoracao por nao haver base anterior"
                 )
                 logger.info(
                     f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] ({index}/{total_tables}) │  └─ "
@@ -147,13 +159,28 @@ class RawImportPromotionRepository:
                     "Sem copia linha-a-linha para reduzir tempo de promocao."
                 )
                 if not existed:
-                    detail += " Tabela final inexistente; comparacao/auditoria foi ignorada por nao haver base anterior."
+                    detail += " Tabela final inexistente; monitoracao foi ignorada por nao haver base anterior."
                 self._insert_control(conn, table.table_name, status, detail)
             logger.info(f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] ({index}/{total_tables}) │  └─ FIM registro de controle")
             
             logger.info(
                 f"{self._log_prefix('PROMOCAO')} [{int(progress_percent):3d}%] ({index}/{total_tables}) └─ FIM tabela '{table.table_name}' {status}"
             )
+
+    def _table_was_already_swapped(self, table_name):
+        if not self._table_exists(self.final_db, table_name):
+            return False
+        if not self._table_exists(self.import_db, table_name):
+            return True
+
+        import_table = (
+            f"{quote_identifier(self.import_db)}."
+            f"{quote_identifier(table_name)}"
+        )
+        with self.import_engine.connect() as conn:
+            return conn.execute(
+                text(f"SELECT 1 FROM {import_table} LIMIT 1")
+            ).first() is None
 
     def _swap_table_to_final(self, table_name):
         started_at = time.time()
@@ -213,305 +240,203 @@ class RawImportPromotionRepository:
             conn.execute(text(raw_import_create_table_sql(table)))
         logger.debug(f"{self._log_prefix('RECREATE')} {table_name}: FIM recriar schema vazio")
 
-    def _audit_monitored_fields(self, table_name):
-        if not Settings.MONITORED_FIELD_AUDIT_ENABLED:
-            logger.info(
-                f"{self._log_prefix('MONITORAMENTO')} {table_name}: "
-                "auditoria de campos monitorados desabilitada por configuracao"
-            )
+    def _monitor_business_changes(self, table_name):
+        if table_name == "estabelecimento":
+            self._monitor_estabelecimento_changes()
             return
 
-        fields = self._monitored_fields_for_table(table_name)
-        if not fields:
-            logger.info(f"{self._log_prefix('MONITORAMENTO')} {table_name}: nenhum campo monitorado")
+        if table_name == "socio":
+            self._monitor_socio_changes()
             return
 
+        logger.info(
+            f"{self._log_prefix('MONITORAMENTO')} {table_name}: sem monitoracao especifica"
+        )
+
+    def _monitor_estabelecimento_changes(self):
         started_at = time.time()
-        total_fields = len(fields)
-        logger.info(
-            f"{self._log_prefix('MONITORAMENTO')} {table_name}: INICIO auditoria de {total_fields} campo(s)"
+        self._ensure_monitoring_indexes(
+            "estabelecimento",
+            "idx_monitor_estab_chave",
+            ("cnpj_basico", "cnpj_ordem", "cnpj_dv"),
         )
-        
-        for field_index, field_name in enumerate(fields, 1):
-            progress_percent = (field_index / total_fields) * 100
-            logger.info(
-                f"{self._log_prefix('MONITORAMENTO')} {table_name}.{field_name} [{int(progress_percent):3d}%] INICIO"
-            )
-            inserted = self._monitor_field_in_batches(table_name, field_name)
-            logger.info(
-                f"{self._log_prefix('MONITORAMENTO')} {table_name}.{field_name} [{int(progress_percent):3d}%] FIM | "
-                f"{inserted} alteracoes registradas"
-            )
-        
-        elapsed = time.time() - started_at
-        logger.info(
-            f"{self._log_prefix('MONITORAMENTO')} {table_name}: FIM auditoria | tempo total={elapsed:.2f}s"
-        )
-
-    def _monitored_fields_for_table(self, table_name):
-        logger.debug(f"{self._log_prefix('MONITORAMENTO')} {table_name}: INICIO identificar campos monitorados")
-        table = RFB_TABLES_BY_NAME[table_name]
-        valid_columns = set(table.columns)
-        sql = text(
-            f"SELECT campo FROM {quote_identifier(self.final_db)}.controle_campo_monitorado "
-            "WHERE tabela = :table_name AND ativo = 1"
-        )
-        with self.final_engine.connect() as conn:
-            rows = conn.execute(sql, {"table_name": table_name}).fetchall()
-
-        fields = []
-        ignored_count = 0
-        for row in rows:
-            field_name = row.campo
-            if field_name in valid_columns:
-                fields.append(field_name)
-                logger.debug(f"{self._log_prefix('MONITORAMENTO')} {table_name}: campo '{field_name}' será auditado")
-            else:
-                ignored_count += 1
-                logger.warning(
-                    f"{self._log_prefix('MONITORAMENTO')} campo ignorado: {table_name}.{field_name} "
-                    "nao existe no manifesto RFB."
-                )
-        
-        logger.debug(
-            f"{self._log_prefix('MONITORAMENTO')} {table_name}: FIM identificar campos | "
-            f"{len(fields)} validos, {ignored_count} ignorados"
-        )
-        return fields
-
-    def _monitor_field_in_batches(self, table_name, field_name):
-        batch_size = Settings.MONITORED_FIELD_BATCH_SIZE
-
-        if batch_size <= 0:
-            logger.info(
-                f"{self._log_prefix('MONITORAMENTO')} {table_name}.{field_name}: INICIO processamento sem lotes"
-            )
-            inserted = self._insert_monitored_field_history(table_name, field_name)
-            self._refresh_monitored_field_state(table_name, field_name)
-            logger.info(
-                f"{self._log_prefix('MONITORAMENTO')} {table_name}.{field_name}: FIM processamento | {inserted} alteracoes"
-            )
-            return inserted
-
-        inserted = 0
-        offset = 0
-        table = RFB_TABLES_BY_NAME[table_name]
-        total_rows = self._count_table_rows(table)
-        
-        logger.info(
-            f"{self._log_prefix('MONITORAMENTO')} {table_name}.{field_name}: INICIO processamento em lotes"
-        )
-        logger.info(
-            f"{self._log_prefix('MONITORAMENTO')} {table_name}.{field_name}: ├─ Total registros: {total_rows}"
-        )
-        logger.info(
-            f"{self._log_prefix('MONITORAMENTO')} {table_name}.{field_name}: ├─ Tamanho lote: {batch_size}"
-        )
-        logger.info(
-            f"{self._log_prefix('MONITORAMENTO')} {table_name}.{field_name}: └─ INICIO comparacao valores (antigos vs novos)"
-        )
-
-        batch_count = 0
-        while self._import_batch_has_rows(table, batch_size, offset):
-            batch_count += 1
-            batch_inserted = self._insert_monitored_field_history(
-                table_name,
-                field_name,
-                batch_size=batch_size,
-                offset=offset,
-            )
-            inserted += batch_inserted
-            
-            self._refresh_monitored_field_state(
-                table_name,
-                field_name,
-                batch_size=batch_size,
-                offset=offset,
-            )
-            offset += batch_size
-            progress_percent = min((offset / total_rows) * 100, 100) if total_rows > 0 else 0
-            logger.info(
-                f"{self._log_prefix('MONITORAMENTO')} {table_name}.{field_name}: "
-                f"[{int(progress_percent):3d}%] lote {batch_count} | "
-                f"{offset}/{total_rows} registros | {batch_inserted} mudancas detectadas"
-            )
-
-        logger.info(
-            f"{self._log_prefix('MONITORAMENTO')} {table_name}.{field_name}: └─ FIM comparacao valores"
-        )
-        logger.info(
-            f"{self._log_prefix('MONITORAMENTO')} {table_name}.{field_name}: FIM processamento | "
-            f"total={inserted} alteracoes em {batch_count} lotes"
-        )
-        return inserted
-    
-    def _count_table_rows(self, table):
-        """Conta o número de registros na tabela de import."""
-        import_table = f"{quote_identifier(self.import_db)}.{quote_identifier(table.table_name)}"
-        sql = f"SELECT COUNT(*) as cnt FROM {import_table}"
-        try:
-            with self.final_engine.connect() as conn:
-                result = conn.execute(text(sql)).first()
-                return result.cnt if result else 0
-        except Exception:
-            return 0
-
-    def _import_batch_has_rows(self, table, batch_size, offset):
-        import_table = f"{quote_identifier(self.import_db)}.{quote_identifier(table.table_name)}"
-        order_by = ", ".join(quote_identifier(column) for column in table.key_columns)
-        sql = (
-            f"SELECT 1 FROM {import_table} "
-            f"ORDER BY {order_by} "
-            f"LIMIT 1 OFFSET {int(offset)}"
-        )
-        with self.final_engine.connect() as conn:
-            return conn.execute(text(sql)).first() is not None
-
-    def _monitoring_source_sql(self, table, alias, batch_size=None, offset=0):
-        import_table = f"{quote_identifier(self.import_db)}.{quote_identifier(table.table_name)}"
-
-        if not batch_size or batch_size <= 0:
-            return f"{import_table} {alias}"
-
-        order_by = ", ".join(quote_identifier(column) for column in table.key_columns)
-        return (
-            f"(SELECT * FROM {import_table} "
-            f"ORDER BY {order_by} "
-            f"LIMIT {int(batch_size)} OFFSET {int(offset)}) {alias}"
-        )
-
-    def _monitor_key_expr(self, alias, key_columns):
-        parts = [
-            f"COALESCE(CAST({alias}.{quote_identifier(column)} AS CHAR), '')"
-            for column in key_columns
-        ]
-        return "CONCAT_WS('|', " + ", ".join(parts) + ")"
-
-    def _insert_monitored_field_history(
-        self,
-        table_name,
-        field_name,
-        batch_size=None,
-        offset=0,
-    ):
-        table = RFB_TABLES_BY_NAME[table_name]
-        source_sql = self._monitoring_source_sql(table, "n", batch_size, offset)
-        state_table = f"{quote_identifier(self.final_db)}.estado_campo_monitorado"
-        history_table = f"{quote_identifier(self.final_db)}.historico_campo_monitorado"
-        key_expr = self._monitor_key_expr("n", table.key_columns)
-        value_expr = f"COALESCE(CAST(n.{quote_identifier(field_name)} AS CHAR), '')"
+        import_table = f"{quote_identifier(self.import_db)}.estabelecimento"
+        final_table = f"{quote_identifier(self.final_db)}.estabelecimento"
+        detail_table = f"{quote_identifier(self.final_db)}.monitoramento_cnpj_mudanca"
         now = datetime.now()
-        
-        logger.debug(
-            f"{self._log_prefix('COMPARACAO')} {table_name}.{field_name}: INICIO comparar valores (antigos vs novos)"
-        )
-        
+        movement_date = now.date()
+        movement_time = now.time().replace(microsecond=0)
+        old_status_expr = "LEFT(TRIM(COALESCE(antigo.situacao_cadastral, '')), 2)"
+        new_status_expr = "LEFT(TRIM(COALESCE(novo.situacao_cadastral, '')), 2)"
+
         sql = f"""
-            INSERT INTO {history_table}
-                (tabela, campo, chave_hash, chave, valor_anterior, valor_novo,
-                 data_movimento, hora_movimento)
+            INSERT INTO {detail_table}
+                (tipo_evento, cnpj_basico, cnpj_ordem, cnpj_dv,
+                 situacao_anterior, situacao_nova, data_movimento, hora_movimento)
             SELECT
-                :table_name,
-                :field_name,
-                SHA2({key_expr}, 256),
-                {key_expr},
-                s.valor_atual,
-                {value_expr},
+                CASE
+                    WHEN antigo.cnpj_basico IS NULL THEN 'cnpj_novo'
+                    WHEN {old_status_expr} = '02'
+                         AND {new_status_expr} <> '02'
+                        THEN 'cnpj_inativado'
+                    WHEN {old_status_expr} <> '02'
+                         AND {new_status_expr} = '02'
+                        THEN 'cnpj_ativado'
+                END,
+                novo.cnpj_basico,
+                novo.cnpj_ordem,
+                novo.cnpj_dv,
+                antigo.situacao_cadastral,
+                novo.situacao_cadastral,
                 :data_movimento,
                 :hora_movimento
-            FROM {source_sql}
-            INNER JOIN {state_table} s
-                ON s.tabela = :table_name
-                AND s.campo = :field_name
-                AND s.chave_hash = SHA2({key_expr}, 256)
-            WHERE NOT (COALESCE(s.valor_atual, '') = {value_expr})
-        """
-        result = self._execute_monitoring_sql_with_retries(
-            operation="historico",
-            table_name=table_name,
-            field_name=field_name,
-            sql=sql,
-            params={
-                "table_name": table_name,
-                "field_name": field_name,
-                "data_movimento": now.date(),
-                "hora_movimento": now.time().replace(microsecond=0),
-            },
-        )
-        
-        inserted = result.rowcount or 0
-        logger.debug(
-            f"{self._log_prefix('COMPARACAO')} {table_name}.{field_name}: FIM comparacao | {inserted} mudancas detectadas"
-        )
-        return inserted
-
-    def _refresh_monitored_field_state(
-        self,
-        table_name,
-        field_name,
-        batch_size=None,
-        offset=0,
-    ):
-        logger.debug(
-            f"{self._log_prefix('ESTADO')} {table_name}.{field_name}: INICIO atualizar estado de campos"
-        )
-        table = RFB_TABLES_BY_NAME[table_name]
-        source_sql = self._monitoring_source_sql(table, "n", batch_size, offset)
-        state_table = f"{quote_identifier(self.final_db)}.estado_campo_monitorado"
-        key_expr = self._monitor_key_expr("n", table.key_columns)
-        value_expr = f"COALESCE(CAST(n.{quote_identifier(field_name)} AS CHAR), '')"
-        sql = f"""
-            INSERT INTO {state_table}
-                (tabela, campo, chave_hash, chave, valor_atual, updated_at)
-            SELECT
-                :table_name,
-                :field_name,
-                SHA2({key_expr}, 256),
-                {key_expr},
-                {value_expr},
-                NOW()
-            FROM {source_sql}
-            ON DUPLICATE KEY UPDATE
-                chave = VALUES(chave),
-                valor_atual = VALUES(valor_atual),
-                updated_at = IF(
-                    COALESCE(valor_atual, '') = COALESCE(VALUES(valor_atual), ''),
-                    updated_at,
-                    VALUES(updated_at)
+            FROM {import_table} novo
+            LEFT JOIN {final_table} antigo
+                ON antigo.cnpj_basico = novo.cnpj_basico
+                AND antigo.cnpj_ordem = novo.cnpj_ordem
+                AND antigo.cnpj_dv = novo.cnpj_dv
+            WHERE
+                antigo.cnpj_basico IS NULL
+                OR (
+                    {old_status_expr} = '02'
+                    AND {new_status_expr} <> '02'
+                )
+                OR (
+                    {old_status_expr} <> '02'
+                    AND {new_status_expr} = '02'
                 )
         """
-        self._execute_monitoring_sql_with_retries(
-            operation="estado",
-            table_name=table_name,
-            field_name=field_name,
-            sql=sql,
-            params={
-                "table_name": table_name,
-                "field_name": field_name,
+        inserted = self._execute_business_monitoring_sql(
+            "estabelecimento",
+            sql,
+            {
+                "data_movimento": movement_date,
+                "hora_movimento": movement_time,
             },
         )
-        logger.debug(
-            f"{self._log_prefix('ESTADO')} {table_name}.{field_name}: FIM atualizar estado de campos"
+        counts = self._monitoring_counts(
+            "cnpj_novo",
+            "cnpj_ativado",
+            "cnpj_inativado",
+            movement_date=movement_date,
+            movement_time=movement_time,
+        )
+        self._insert_monitoring_summary(
+            source_table="estabelecimento",
+            cnpjs_novos=counts["cnpj_novo"],
+            cnpjs_ativados=counts["cnpj_ativado"],
+            cnpjs_inativados=counts["cnpj_inativado"],
+            socios_alterados=0,
+        )
+        logger.info(
+            f"{self._log_prefix('MONITORAMENTO')} estabelecimento: "
+            f"novos={counts['cnpj_novo']} | ativados={counts['cnpj_ativado']} | "
+            f"inativados={counts['cnpj_inativado']} | detalhes={inserted} | "
+            f"tempo={self._format_duration(time.time() - started_at)}"
         )
 
-    def _execute_monitoring_sql_with_retries(
-        self,
-        operation,
-        table_name,
-        field_name,
-        sql,
-        params,
-    ):
-        last_error = None
+    def _monitor_socio_changes(self):
+        started_at = time.time()
+        self._ensure_monitoring_indexes(
+            "socio",
+            "idx_monitor_socio_cnpj",
+            ("cnpj_basico",),
+        )
+        import_table = f"{quote_identifier(self.import_db)}.socio"
+        final_table = f"{quote_identifier(self.final_db)}.socio"
+        detail_table = f"{quote_identifier(self.final_db)}.monitoramento_cnpj_mudanca"
+        now = datetime.now()
+        movement_date = now.date()
+        movement_time = now.time().replace(microsecond=0)
 
+        socios_hash_expr = """
+            SHA2(
+                GROUP_CONCAT(
+                    SHA2(
+                        CONCAT_WS('|',
+                            COALESCE(identificador_socio, ''),
+                            COALESCE(nome_socio, ''),
+                            COALESCE(cpf_cnpj_socio, ''),
+                            COALESCE(qualificacao_socio, ''),
+                            COALESCE(data_entrada_sociedade, ''),
+                            COALESCE(pais, ''),
+                            COALESCE(representante_legal, ''),
+                            COALESCE(nome_representante, ''),
+                            COALESCE(qualificacao_representante_legal, ''),
+                            COALESCE(faixa_etaria, '')
+                        ),
+                        256
+                    )
+                    ORDER BY identificador_socio, cpf_cnpj_socio, nome_socio, data_entrada_sociedade
+                    SEPARATOR ''
+                ),
+                256
+            )
+        """
+        sql = f"""
+            INSERT INTO {detail_table}
+                (tipo_evento, cnpj_basico, qtd_socios_anterior, qtd_socios_nova,
+                 hash_socios_anterior, hash_socios_nova, data_movimento, hora_movimento)
+            SELECT
+                'socios_alterados',
+                novo.cnpj_basico,
+                antigo.qtd_socios,
+                novo.qtd_socios,
+                antigo.hash_socios,
+                novo.hash_socios,
+                :data_movimento,
+                :hora_movimento
+            FROM (
+                SELECT
+                    cnpj_basico,
+                    COUNT(*) AS qtd_socios,
+                    {socios_hash_expr} AS hash_socios
+                FROM {import_table}
+                GROUP BY cnpj_basico
+            ) novo
+            INNER JOIN (
+                SELECT
+                    cnpj_basico,
+                    COUNT(*) AS qtd_socios,
+                    {socios_hash_expr} AS hash_socios
+                FROM {final_table}
+                GROUP BY cnpj_basico
+            ) antigo
+                ON antigo.cnpj_basico = novo.cnpj_basico
+            WHERE
+                COALESCE(antigo.qtd_socios, 0) <> COALESCE(novo.qtd_socios, 0)
+                OR COALESCE(antigo.hash_socios, '') <> COALESCE(novo.hash_socios, '')
+        """
+        inserted = self._execute_business_monitoring_sql(
+            "socio",
+            sql,
+            {
+                "data_movimento": movement_date,
+                "hora_movimento": movement_time,
+            },
+        )
+        self._insert_monitoring_summary(
+            source_table="socio",
+            cnpjs_novos=0,
+            cnpjs_ativados=0,
+            cnpjs_inativados=0,
+            socios_alterados=inserted,
+        )
+        logger.info(
+            f"{self._log_prefix('MONITORAMENTO')} socio: socios_alterados={inserted} | "
+            f"tempo={self._format_duration(time.time() - started_at)}"
+        )
+
+    def _execute_business_monitoring_sql(self, operation, sql, params):
+        last_error = None
         max_retries = max(1, Settings.MAX_RETRIES)
 
         for attempt in range(1, max_retries + 1):
             try:
                 with self.final_engine.begin() as conn:
                     self._prepare_promotion_session(conn)
-                    return conn.execute(text(sql), params)
-
+                    result = conn.execute(text(sql), params)
+                    return result.rowcount or 0
             except SQLAlchemyError as exc:
                 last_error = exc
 
@@ -520,18 +445,123 @@ class RawImportPromotionRepository:
 
                 logger.warning(
                     f"{self._log_prefix('MONITORAMENTO')} lock timeout | "
-                    f"{table_name}.{field_name} | operacao={operation} | "
-                    f"tentativa={attempt}/{max_retries} | "
+                    f"operacao={operation} | tentativa={attempt}/{max_retries}"
                 )
                 error_detail_logger.warning(
                     f"{self._log_prefix('MONITORAMENTO')} lock timeout | "
-                    f"{table_name}.{field_name} | operacao={operation} | "
-                    f"tentativa={attempt}/{max_retries} | erro={exc}"
+                    f"operacao={operation} | tentativa={attempt}/{max_retries} | erro={exc}"
                 )
                 self._log_database_processes()
                 time.sleep(Settings.RETRY_DELAY)
 
         raise last_error
+
+    def _ensure_monitoring_indexes(self, table_name, index_name, columns):
+        for database_name in (self.import_db, self.final_db):
+            if self._index_exists(database_name, table_name, index_name):
+                continue
+
+            table_ref = f"{quote_identifier(database_name)}.{quote_identifier(table_name)}"
+            columns_sql = ", ".join(quote_identifier(column) for column in columns)
+            logger.info(
+                f"{self._log_prefix('MONITORAMENTO')} criando indice {database_name}.{table_name}.{index_name}"
+            )
+            with self.final_engine.begin() as conn:
+                self._prepare_promotion_session(conn)
+                conn.execute(
+                    text(
+                        f"ALTER TABLE {table_ref} "
+                        f"ADD INDEX {quote_identifier(index_name)} ({columns_sql})"
+                    )
+                )
+
+    def _index_exists(self, database_name, table_name, index_name):
+        with self.final_engine.connect() as conn:
+            result = conn.execute(
+                text(
+                    "SELECT 1 FROM INFORMATION_SCHEMA.STATISTICS "
+                    "WHERE TABLE_SCHEMA = :schema "
+                    "AND TABLE_NAME = :table "
+                    "AND INDEX_NAME = :index_name "
+                    "LIMIT 1"
+                ),
+                {
+                    "schema": database_name,
+                    "table": table_name,
+                    "index_name": index_name,
+                },
+            ).first()
+        return result is not None
+
+    def _monitoring_counts(self, *event_types, movement_date, movement_time):
+        detail_table = f"{quote_identifier(self.final_db)}.monitoramento_cnpj_mudanca"
+        placeholders = ", ".join(f":event_{index}" for index, _ in enumerate(event_types))
+        params = {
+            "data_movimento": movement_date,
+            "hora_movimento": movement_time,
+        }
+        for index, event_type in enumerate(event_types):
+            params[f"event_{index}"] = event_type
+
+        with self.final_engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    f"""
+                    SELECT tipo_evento, COUNT(*) AS total
+                    FROM {detail_table}
+                    WHERE data_movimento = :data_movimento
+                      AND hora_movimento = :hora_movimento
+                      AND tipo_evento IN ({placeholders})
+                    GROUP BY tipo_evento
+                    """
+                ),
+                params,
+            ).fetchall()
+
+        counts = {event_type: 0 for event_type in event_types}
+        counts.update({row.tipo_evento: row.total for row in rows})
+        return counts
+
+    def _insert_monitoring_summary(
+        self,
+        source_table,
+        cnpjs_novos,
+        cnpjs_ativados,
+        cnpjs_inativados,
+        socios_alterados,
+    ):
+        now = datetime.now()
+        summary_table = f"{quote_identifier(self.final_db)}.resumo_monitoramento_cnpj"
+        detail = (
+            f"cnpjs_novos={cnpjs_novos}; "
+            f"cnpjs_ativados={cnpjs_ativados}; "
+            f"cnpjs_inativados={cnpjs_inativados}; "
+            f"socios_alterados={socios_alterados}"
+        )
+
+        with self.final_engine.begin() as conn:
+            conn.execute(
+                text(
+                    f"""
+                    INSERT INTO {summary_table}
+                        (tabela_origem, cnpjs_novos, cnpjs_ativados, cnpjs_inativados,
+                         socios_alterados, data_movimento, hora_movimento)
+                    VALUES
+                        (:tabela_origem, :cnpjs_novos, :cnpjs_ativados, :cnpjs_inativados,
+                         :socios_alterados, :data_movimento, :hora_movimento)
+                    """
+                ),
+                {
+                    "tabela_origem": source_table,
+                    "cnpjs_novos": cnpjs_novos,
+                    "cnpjs_ativados": cnpjs_ativados,
+                    "cnpjs_inativados": cnpjs_inativados,
+                    "socios_alterados": socios_alterados,
+                    "data_movimento": now.date(),
+                    "hora_movimento": now.time().replace(microsecond=0),
+                },
+            )
+            self._insert_control(conn, source_table, "monitorada", detail)
 
     def _mysql_error_code(self, error):
         original = getattr(error, "orig", None)
@@ -623,74 +653,62 @@ class RawImportPromotionRepository:
                 INDEX idx_controle_status (status)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         """
-        monitored_sql = f"""
-            CREATE TABLE IF NOT EXISTS {quote_identifier(self.final_db)}.controle_campo_monitorado (
+        monitoring_detail_sql = f"""
+            CREATE TABLE IF NOT EXISTS {quote_identifier(self.final_db)}.monitoramento_cnpj_mudanca (
                 id BIGINT AUTO_INCREMENT PRIMARY KEY,
-                tabela VARCHAR(100) NOT NULL,
-                campo VARCHAR(100) NOT NULL,
-                ativo TINYINT(1) NOT NULL DEFAULT 1,
-                observacao VARCHAR(500) NULL,
-                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                UNIQUE KEY uq_controle_campo_monitorado (tabela, campo),
-                INDEX idx_controle_campo_ativo (ativo, tabela)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-        """
-        state_sql = f"""
-            CREATE TABLE IF NOT EXISTS {quote_identifier(self.final_db)}.estado_campo_monitorado (
-                tabela VARCHAR(100) NOT NULL,
-                campo VARCHAR(100) NOT NULL,
-                chave_hash CHAR(64) NOT NULL,
-                chave LONGTEXT NOT NULL,
-                valor_atual LONGTEXT NULL,
-                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY (tabela, campo, chave_hash),
-                INDEX idx_estado_tabela_campo (tabela, campo)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-        """
-        history_sql = f"""
-            CREATE TABLE IF NOT EXISTS {quote_identifier(self.final_db)}.historico_campo_monitorado (
-                id BIGINT AUTO_INCREMENT PRIMARY KEY,
-                tabela VARCHAR(100) NOT NULL,
-                campo VARCHAR(100) NOT NULL,
-                chave_hash CHAR(64) NOT NULL,
-                chave LONGTEXT NOT NULL,
-                valor_anterior LONGTEXT NULL,
-                valor_novo LONGTEXT NULL,
+                tipo_evento VARCHAR(50) NOT NULL,
+                cnpj_basico VARCHAR(255) NOT NULL,
+                cnpj_ordem VARCHAR(255) NULL,
+                cnpj_dv VARCHAR(255) NULL,
+                situacao_anterior VARCHAR(255) NULL,
+                situacao_nova VARCHAR(255) NULL,
+                qtd_socios_anterior BIGINT NULL,
+                qtd_socios_nova BIGINT NULL,
+                hash_socios_anterior CHAR(64) NULL,
+                hash_socios_nova CHAR(64) NULL,
                 data_movimento DATE NOT NULL,
                 hora_movimento TIME NOT NULL,
                 created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                INDEX idx_hist_monitor_tabela_campo_data (tabela, campo, data_movimento),
-                INDEX idx_hist_monitor_hash (tabela, campo, chave_hash)
+                INDEX idx_monitor_cnpj_tipo_data (tipo_evento, data_movimento),
+                INDEX idx_monitor_cnpj_chave (cnpj_basico, cnpj_ordem, cnpj_dv),
+                INDEX idx_monitor_cnpj_data (data_movimento, hora_movimento)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """
+        monitoring_summary_sql = f"""
+            CREATE TABLE IF NOT EXISTS {quote_identifier(self.final_db)}.resumo_monitoramento_cnpj (
+                id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                tabela_origem VARCHAR(100) NOT NULL,
+                cnpjs_novos BIGINT NOT NULL DEFAULT 0,
+                cnpjs_ativados BIGINT NOT NULL DEFAULT 0,
+                cnpjs_inativados BIGINT NOT NULL DEFAULT 0,
+                socios_alterados BIGINT NOT NULL DEFAULT 0,
+                data_movimento DATE NOT NULL,
+                hora_movimento TIME NOT NULL,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_resumo_monitor_data (data_movimento, hora_movimento),
+                INDEX idx_resumo_monitor_tabela (tabela_origem, data_movimento)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         """
         with self.final_engine.begin() as conn:
             conn.execute(text(control_sql))
-            conn.execute(text(monitored_sql))
-            conn.execute(text(state_sql))
-            conn.execute(text(history_sql))
-        self._seed_default_monitored_fields()
+            conn.execute(text(monitoring_detail_sql))
+            conn.execute(text(monitoring_summary_sql))
+            self._ensure_monitoring_table_schema(conn)
 
-    def _seed_default_monitored_fields(self):
-        if not Settings.MONITORED_FIELDS_BOOTSTRAP_DEFAULTS:
-            return
-
-        try:
-            with self.final_engine.begin() as conn:
-                conn.execute(
-                    text(
-                        f"INSERT IGNORE INTO {quote_identifier(self.final_db)}.controle_campo_monitorado "
-                        "(tabela, campo, ativo, observacao) "
-                        "VALUES ('estabelecimento', 'situacao_cadastral', 1, "
-                        "'Campo padrao para historico de mudanca ativa/inativa.')"
-                    )
-                )
-        except SQLAlchemyError as exc:
-            logger.warning(
-                f"{self._log_prefix('MONITORAMENTO')} campo padrao nao foi criado. "
-                "Se a tabela controle_campo_monitorado ja e administrada por DBA, "
-                f"isso pode ser esperado. Erro: {exc}"
+    def _ensure_monitoring_table_schema(self, conn):
+        table_ref = f"{quote_identifier(self.final_db)}.monitoramento_cnpj_mudanca"
+        conn.execute(
+            text(
+                f"""
+                ALTER TABLE {table_ref}
+                    MODIFY cnpj_basico VARCHAR(255) NOT NULL,
+                    MODIFY cnpj_ordem VARCHAR(255) NULL,
+                    MODIFY cnpj_dv VARCHAR(255) NULL,
+                    MODIFY situacao_anterior VARCHAR(255) NULL,
+                    MODIFY situacao_nova VARCHAR(255) NULL
+                """
             )
+        )
 
     def _insert_control(self, conn, table_name, status, alteration=None):
         logger.debug(f"{self._log_prefix('CONTROLE')} {table_name}: registrando {status}")
@@ -846,6 +864,7 @@ class RawImportPromotionRepository:
                 f"{int(Settings.DB_PROMOTION_LOCK_WAIT_TIMEOUT)}"
             )
         )
+        conn.execute(text("SET SESSION group_concat_max_len = 16777216"))
 
     def _table_signature(self, database_name, table_name, columns):
         table_ref = f"{quote_identifier(database_name)}.{quote_identifier(table_name)}"

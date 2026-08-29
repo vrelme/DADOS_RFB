@@ -45,9 +45,9 @@ def compare_checksums(engine, db_name1, db_name2, table_name):
 
 def main():
     """Main."""
-    print("\n" + "="*107)
+    print("\n" + "="*101)
     print("🔍 COMPARAÇÃO DE DADOS: rfb_import vs dados_rfb")
-    print("="*107 + "\n")
+    print("="*101 + "\n")
     
     # Setup
     db_name_import = Settings.IMPORT_DB_NAME  # rfb_import
@@ -63,7 +63,7 @@ def main():
     
     # Contar registros
     print("📈 CONTAGEM DE REGISTROS NA TABELA 'empresa':")
-    print("-" * 107)
+    print("-" * 101)
     
     count_import = get_row_count(engine, db_name_import, "empresa")
     count_final = get_row_count(engine, db_name_final, "empresa")
@@ -83,7 +83,7 @@ def main():
     
     # Estrutura das tabelas
     print("🏗️  ESTRUTURA DAS TABELAS:")
-    print("-" * 107)
+    print("-" * 101)
     
     cols_import = get_column_info(engine, db_name_import, "empresa")
     cols_final = get_column_info(engine, db_name_final, "empresa")
@@ -111,7 +111,7 @@ def main():
     
     # Comparação de alguns registros
     print("📋 AMOSTRA DE DADOS (primeiros 3 registros):")
-    print("-" * 107)
+    print("-" * 101)
     
     try:
         with engine.connect() as conn:
@@ -132,9 +132,9 @@ def main():
         print(f"❌ Erro ao recuperar amostra de dados: {e}")
     
     print()
-    print("="*107)
+    print("="*101)
     print("✅ Verificação concluída")
-    print("="*107)
+    print("="*101)
 
 if __name__ == "__main__":
     main()

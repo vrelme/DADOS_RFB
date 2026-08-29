@@ -1,6 +1,6 @@
 # Dados Publicos CNPJ - RFB Loader Enterprise
 
-Processo ETL para carga dos dados publicos do CNPJ disponibilizados pela Receita Federal do Brasil em MariaDB.
+Processo ETL para carga dos dados publicos do CNPJ disponibilizados pela Receita Federal do Brasil (https://dados.gov.br/dados/conjuntos-dados/cadastro-nacional-da-pessoa-juridica---cnpj) (https://arquivos.receitafederal.gov.br/index.php/s/YggdBLfdninEJX9) em MariaDB.
 
 Fonte oficial e layout dos arquivos: [metadados da RFB](https://www.gov.br/receitafederal/dados/cnpj-metadados.pdf).
 
@@ -64,12 +64,13 @@ empresa | FIM LEITURA | K3241.K03200Y0.D60411.EMPRECSV | ... registros
 ## Fluxo Atual
 
 1. Valida diretorios e arquivos de entrada.
-2. Cria/verifica `rfb_import`, `dados_rfb_ops` e, na promocao, `dados_rfb`.
-3. Cria tabelas raw em `rfb_import` sem indices/PK para carga rapida.
-4. Carrega todos os arquivos RFB com `LOAD DATA LOCAL INFILE`.
-5. Registra progresso, metricas, checkpoint e falhas em `dados_rfb_ops`.
-6. Se a carga bruta terminar com sucesso, promove dados de `rfb_import` para `dados_rfb`.
-7. Registra resultado da comparacao em `dados_rfb.controle_alteracao`.
+2. Localiza arquivos `.zip` em `H:\operacao\INPUT_FILES`, extrai o conteúdo para `H:\operacao\INPUT_FILES\arquivos` e, em seguida, copia os arquivos extraídos para `H:\operacao\extracted_files`.
+3. Cria/verifica `rfb_import`, `dados_rfb_ops` e, na promocao, `dados_rfb`.
+4. Cria tabelas raw em `rfb_import` sem indices/PK para carga rapida.
+5. Carrega todos os arquivos RFB com `LOAD DATA LOCAL INFILE`.
+6. Registra progresso, metricas, checkpoint e falhas em `dados_rfb_ops`.
+7. Se a carga bruta terminar com sucesso, promove dados de `rfb_import` para `dados_rfb`.
+8. Registra resultado da comparacao em `dados_rfb.controle_alteracao`.
 
 ## Tabelas Brutas
 
@@ -125,12 +126,11 @@ Por padrao, a promocao usa `DB_PROMOTION_STRATEGY=rename_swap`: as tabelas carre
 `rfb_import` sao movidas para `dados_rfb` com `RENAME TABLE`, evitando copia linha-a-linha.
 Depois disso, as tabelas brutas sao recriadas vazias em `rfb_import` para a proxima carga.
 
-Antes do `rename_swap`, o ETL executa auditoria seletiva dos campos configurados em
-`dados_rfb.controle_campo_monitorado`. Por padrao, `estabelecimento.situacao_cadastral`
-e monitorado para registrar historico de mudanca ativa/inativa em
-`dados_rfb.historico_campo_monitorado`. Essa auditoria so roda quando a tabela ja existe
-em `dados_rfb`; se a tabela final ainda nao existe, a promocao e feita como copia simples
-por `RENAME TABLE`, sem comparacao linha-a-linha.
+Antes do `rename_swap`, quando ja existe base anterior em `dados_rfb`, o ETL executa uma
+monitoracao especifica de negocio. Ela registra CNPJs novos, CNPJs que mudaram de ativo
+para inativo, CNPJs que mudaram de inativo para ativo e empresas cujos socios mudaram.
+Os detalhes ficam em `dados_rfb.monitoramento_cnpj_mudanca`; os totais ficam em
+`dados_rfb.resumo_monitoramento_cnpj` e tambem em `dados_rfb.controle_alteracao`.
 
 A estrategia antiga de copia em lotes continua disponivel com `DB_PROMOTION_STRATEGY=copy`.
 Nesse modo, se `dados_rfb` existir, compara tabela por tabela e registra em `controle_alteracao`:
@@ -139,12 +139,12 @@ Nesse modo, se `dados_rfb` existir, compara tabela por tabela e registra em `con
 - `tem alteracao`: houve divergencia de contagem/checksum;
 - `copiada`: tabela final nao existia e foi copiada.
 
-Por performance, a auditoria detalhada campo-a-campo fica limitada por configuracao e por padrao roda apenas em tabelas pequenas de dominio.
+Por performance, a comparacao pesada fica restrita a perguntas de negocio especificas, evitando auditoria generica campo-a-campo em tabelas grandes.
 
 ## Variaveis Principais
 
 ```env
-APP_VERSION=V3.0.0
+APP_VERSION=V3.1.0
 DB_NAME=dados_rfb
 IMPORT_DB_NAME=rfb_import
 OPERATIONAL_DB_NAME=dados_rfb_ops
@@ -158,8 +158,6 @@ RAW_IMPORT_RESET_TABLES=True
 RAW_IMPORT_FAST_SCHEMA=True
 PROMOTE_RAW_IMPORT_AFTER_LOAD=True
 DB_PROMOTION_STRATEGY=rename_swap
-MONITORED_FIELDS_BOOTSTRAP_DEFAULTS=True
-MONITORED_FIELD_AUDIT_ENABLED=True
 CONTROL_DIFF_MAX_ROWS=1000
 CONTROL_DIFF_DETAIL_TABLES=cnae,moti,munic,natju,pais,quals
 DB_LOCAL_INFILE=True
@@ -167,10 +165,6 @@ DB_LOCAL_INFILE=True
 
 `APP_VERSION` e exibida no cabecalho inicial do log para facilitar auditoria da versao
 executada em producao.
-
-Para rodadas de performance em que o historico de campos monitorados pode ser adiado,
-defina `MONITORED_FIELD_AUDIT_ENABLED=False`. Isso evita a auditoria pesada de
-`estabelecimento.situacao_cadastral` durante a promocao.
 
 Para `LOAD DATA LOCAL INFILE`, o MariaDB tambem precisa estar com `local_infile=ON` no servidor.
 
@@ -188,6 +182,54 @@ cd "F:\Repositorio\15_Git\RFB Loader Enterprise"
 .\.venv\Scripts\Activate.ps1
 python -m app.main
 ```
+
+## API De Consulta CNPJ
+
+A API permite que aplicacoes externas consultem um CNPJ na base final da RFB e recebam se
+o estabelecimento esta ativo e qual e o logradouro cadastrado.
+
+Instale as dependencias e inicie o servidor:
+
+```powershell
+pip install -r requirements/base.txt
+uvicorn app.api:app --host 0.0.0.0 --port 8000
+```
+
+Se o banco consultavel se chamar `db_RFB`, configure a aplicacao para apontar para ele antes
+de iniciar a API:
+
+```env
+DB_NAME=db_RFB
+RFB_ACTIVE_DB_NAME=db_RFB
+```
+
+Consulta por GET:
+
+```text
+GET http://localhost:8000/api/v1/cnpj/12345678000195
+```
+
+Consulta por POST:
+
+```http
+POST /api/v1/cnpj
+Content-Type: application/json
+
+{"cnpj": "12.345.678/0001-95"}
+```
+
+Resposta:
+
+```json
+{
+  "cnpj": "12345678000195",
+  "ativo": true,
+  "logradouro": "Rua das Flores",
+  "situacao_cadastral": "02"
+}
+```
+
+O campo `ativo` considera a situacao cadastral `02` como ativa, conforme o layout da RFB.
 
 ## Documentacao
 

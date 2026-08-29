@@ -50,6 +50,120 @@ from app.etl.rfb_manifest import RFB_TABLES
 logger = logging.getLogger(__name__)
 
 
+def _close_session_best_effort(session, logger_instance, label):
+    """Fecha uma sessao sem mascarar a excecao que encerrou o pipeline."""
+    try:
+        session.close()
+    except Exception as exc:
+        logger_instance.warning(
+            f"Falha ao fechar sessao {label}; conexao sera descartada: {exc}"
+        )
+
+
+def prepare_zip_inputs(input_dir, extract_dir, logger_instance=None):
+    logger_instance = logger_instance or logger
+    input_path = Path(input_dir)
+    extract_path = Path(extract_dir)
+
+    if not input_path.exists():
+        logger_instance.warning(f"{"ZIP PREP":<20} | diretório de entrada não encontrado: {input_path}")
+        return []
+
+    staging_dir = input_path / "arquivos"
+    staging_dir.mkdir(parents=True, exist_ok=True)
+
+    logger_instance.info(f"{"ZIP PREP":<20} | iniciação de nova execução limpa")
+
+    if staging_dir.exists():
+        for existing_path in sorted(staging_dir.iterdir()):
+            if existing_path.is_file():
+                existing_path.unlink()
+            elif existing_path.is_dir():
+                for nested_path in sorted(existing_path.rglob("*"), reverse=True):
+                    if nested_path.is_file() or nested_path.is_symlink():
+                        nested_path.unlink()
+                    elif nested_path.is_dir():
+                        nested_path.rmdir()
+                existing_path.rmdir()
+        logger_instance.info(f"{"ZIP PREP":<20} | diretório de staging limpo com sucesso  | {staging_dir}")
+
+    if extract_path.exists():
+        for existing_path in sorted(extract_path.iterdir()):
+            if existing_path.is_file():
+                existing_path.unlink()
+            elif existing_path.is_dir():
+                for nested_path in sorted(existing_path.rglob("*"), reverse=True):
+                    if nested_path.is_file() or nested_path.is_symlink():
+                        nested_path.unlink()
+                    elif nested_path.is_dir():
+                        nested_path.rmdir()
+                existing_path.rmdir()
+        logger_instance.info(f"{"ZIP PREP":<20} | diretório de extração limpo com sucesso | {extract_path}")
+    else:
+        extract_path.mkdir(parents=True, exist_ok=True)
+        logger_instance.info(f"{"ZIP PREP":<20} | diretório de extração criado com sucesso | {extract_path}")
+
+    zip_files = sorted(input_path.glob("*.zip"))
+    if not zip_files:
+        logger_instance.info(f"{"ZIP PREP":<20} | nenhum arquivo .zip encontrado no diretório de entrada")
+        return []
+
+    prepared_files = []
+
+    def copy_extracted_files(source_dir, relative_root):
+        for extracted_file in sorted(source_dir.rglob("*")):
+            if not extracted_file.is_file():
+                continue
+
+            if extracted_file.suffix.lower() == ".zip":
+                nested_target = source_dir / extracted_file.stem
+                nested_target.mkdir(parents=True, exist_ok=True)
+                with zipfile.ZipFile(extracted_file, "r") as nested_archive:
+                    nested_archive.extractall(nested_target)
+                logger_instance.info(
+                    f"{"ZIP PREP":<20} | arq. zip aninhado extraído com sucesso  | {extracted_file.name} :"
+                )
+                logger_instance.info(
+                                    f"{"":<20} | {nested_target}"
+                )
+                
+                copy_extracted_files(nested_target, relative_root)
+                continue
+
+            destination = extract_path / extracted_file.name
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(extracted_file.read_bytes())
+            prepared_files.append(destination)
+            logger_instance.info(
+                f"{"ZIP PREP":<20} | arquivo extraído com sucesso            | {extracted_file.name} :"
+            )
+            logger_instance.info(
+                f"{"":<20} | {destination}"
+            )
+
+    for zip_path in zip_files:
+        logger_instance.info(f"{"ZIP PREP":<20} | iniciação do processamento do arquivo {zip_path.name}")
+
+        staging_target = staging_dir / zip_path.stem
+        staging_target.mkdir(parents=True, exist_ok=True)
+
+        with zipfile.ZipFile(zip_path, "r") as archive:
+            archive.extractall(staging_target)
+            logger_instance.info(
+                f"{"ZIP PREP":<20} | arquivo copiado para: diretório staging | {zip_path.name}:"
+            )
+            logger_instance.info(
+                f"{"":<20} | {staging_target}"
+            )
+
+        copy_extracted_files(staging_target, staging_target)
+
+    logger_instance.info(
+        f"{"ZIP PREP":<20} | processo concluído com sucesso          | {len(zip_files)} arquivo(s) zip processado(s)"
+    )
+    return prepared_files
+
+
 def format_duration(seconds):
     seconds = float(seconds or 0)
     hours, remainder = divmod(int(seconds), 3600)
@@ -123,6 +237,8 @@ class ETLOrchestrator:
         self._raw_import_expected_tables = set()
         self._table_load_timings = {}
         self._promotion_timings = None
+        self._promotion_started = False
+        self._promotion_repo = None
         self._pipeline_started_at = None
         self._heartbeat_lock = threading.Lock()
         self._heartbeat_active = False
@@ -161,11 +277,11 @@ class ETLOrchestrator:
         while True:
 
             cpu = psutil.cpu_percent()
-
             ram = psutil.virtual_memory().percent
-
+            Texto = "MONITOR"
+            Texto1 = f"CPU={cpu}%"
             self.logger.info(
-                f"MONITOR              | CPU={cpu}% | RAM={ram}%"
+                f"{Texto:<20} | {Texto1:<14} | RAM={ram}%"
             )
 
             time.sleep(60)
@@ -174,13 +290,34 @@ class ETLOrchestrator:
     # MAIN
     # =====================================================
     def run(self):
+        if self._promotion_started:
+            return self._resume_raw_import_promotion()
+
         self._pipeline_started_at = time.time()
 
-        self.logger.info("=" * 107)
+        self.logger.info("=" * 101)
         self.logger.info("RFB LOADER ENTERPRISE")
-        self.logger.info("=" * 107)
+        self.logger.info("=" * 101)
+
+        self.logger.info("=" * 101)
+        self.logger.info("PREPARACAO")
+        self.logger.info("=" * 101)
 
         Settings.create_dirs()
+
+        prepared_files = prepare_zip_inputs(
+            Settings.INPUT_DIR,
+            Settings.EXTRACT_DIR,
+            self.logger,
+        )
+        if prepared_files:
+            self.logger.info(
+                f"{"ZIP PREP":<20} | total de arquivos preparados para processamento: {len(prepared_files)}"
+            )
+
+        self.logger.info("=" * 101)
+        self.logger.info("EXECUCAO ETL")
+        self.logger.info("=" * 101)
 
         if not self.run_id:
             self.run_id = self._start_run()
@@ -216,9 +353,9 @@ class ETLOrchestrator:
             self._finish_run("SUCCESS")
             self._log_timing_summary()
 
-            self.logger.info("=" * 107)
+            self.logger.info("=" * 101)
             self.logger.info("PIPELINE FINALIZADO")
-            self.logger.info("=" * 107)
+            self.logger.info("=" * 101)
 
         except Exception as exc:
             self._finish_run("FAILED", str(exc))
@@ -254,7 +391,7 @@ class ETLOrchestrator:
                 total_files=self._all_input_files_count(),
             )
             self.logger.info(
-                f"ETL RUN START        | id={run.id} | arquivos={run.total_files} | "
+                f"ETL RUN START        | id={run.id:<11} | arquivos={run.total_files} | "
                 f"db={Settings.ACTIVE_DB_NAME}"
             )
             return run.id
@@ -271,7 +408,7 @@ class ETLOrchestrator:
                 status=status,
                 error_message=error_message,
             )
-            self.logger.info(f"ETL RUN {status:<13}| id={self.run_id}")
+            self.logger.info(f"ETL RUN {status:<13}| id={self.run_id:<11} | db={Settings.ACTIVE_DB_NAME}")
         finally:
             db.close()
 
@@ -339,12 +476,16 @@ class ETLOrchestrator:
         if Settings.PROMOTE_RAW_IMPORT_AFTER_LOAD:
             phase = self._start_phase("PROMOTE_RAW_IMPORT", table_name="controle_alteracao")
             try:
-                self.logger.info("-" * 107)
+                self.logger.info("-" * 101)
                 self.logger.info(
                     f"PROMOVENDO {Settings.ACTIVE_DB_NAME} -> {Settings.DB_NAME}"
                 )
-                self.logger.info("-" * 107)
-                self._promotion_timings = RawImportPromotionRepository().promote()
+                self.logger.info("-" * 101)
+                # Mantem o repositorio para retomar apenas as tabelas ainda
+                # nao promovidas se a conexao cair durante o rename_swap.
+                self._promotion_started = True
+                self._promotion_repo = RawImportPromotionRepository()
+                self._promotion_timings = self._promotion_repo.promote()
             finally:
                 self._finish_phase(phase)
         self.logger.info(
@@ -352,11 +493,33 @@ class ETLOrchestrator:
             f"{format_duration(time.time() - raw_import_started_at)}"
         )
 
+    def _resume_raw_import_promotion(self):
+        self.logger.info(
+            "DB RECOVERY          | retomando promocao RAW_IMPORT por tabela"
+        )
+        self._resume_run()
+        phase = self._start_phase(
+            "PROMOTE_RAW_IMPORT_RESUME",
+            table_name="controle_alteracao",
+        )
+        try:
+            if self._promotion_repo is None:
+                self._promotion_repo = RawImportPromotionRepository()
+            self._promotion_timings = self._promotion_repo.promote(resume=True)
+            self._finish_run("SUCCESS")
+            self._log_timing_summary()
+            return self._promotion_timings
+        except Exception as exc:
+            self._finish_run("FAILED", str(exc))
+            raise
+        finally:
+            self._finish_phase(phase)
+
     def _process_rfb_table(self, table):
         table_started_at = time.time()
-        self.logger.info("-" * 107)
+        self.logger.info("-" * 101)
         self.logger.info(f"PROCESSANDO {table.table_name.upper()}")
-        self.logger.info("-" * 107)
+        self.logger.info("-" * 101)
 
         phase = self._start_phase(
             f"LOAD_{table.table_name.upper()}",
@@ -371,7 +534,7 @@ class ETLOrchestrator:
         self._raw_import_expected_tables.add(table.table_name)
 
         self.logger.info(
-            f"{table.table_name} | ordem de carga | "
+            f"{table.table_name:<20} | ordem de carga | "
             f"{', '.join(file_path.name for file_path in files)}"
         )
 
@@ -405,35 +568,35 @@ class ETLOrchestrator:
             else 0
         )
 
-        self.logger.info("=" * 107)
+        self.logger.info("=" * 101)
         self.logger.info("RESUMO DE TEMPOS")
-        self.logger.info("=" * 107)
+        self.logger.info("=" * 101)
         for table_name, elapsed in self._table_load_timings.items():
             self.logger.info(
                 f"TEMPO                | carga tabela {table_name}: {format_duration(elapsed)}"
             )
         if self._table_load_timings:
-            self.logger.info("-" * 107)
+            self.logger.info("-" * 101)
             self.logger.info(
                 f"TEMPO                | carga total: {format_duration(load_total)}"
             )
-            self.logger.info("-" * 107)
+            self.logger.info("-" * 101)
 
         if self._promotion_timings:
             for table_name, elapsed in self._promotion_timings.get("tables", {}).items():
                 self.logger.info(
                     f"TEMPO                | promocao tabela {table_name}: {format_duration(elapsed)}"
                 )
-            self.logger.info("-" * 107)
+            self.logger.info("-" * 101)
             self.logger.info(
                 f"TEMPO                | promocao total: {format_duration(promotion_total)}"
             )
-            self.logger.info("-" * 107)
-        self.logger.info("=" * 107)
+            self.logger.info("-" * 101)
+        self.logger.info("=" * 101)
         self.logger.info(
             f"TEMPO                | total pipeline: {format_duration(total_elapsed)}"
         )
-        self.logger.info("=" * 107)
+        self.logger.info("=" * 101)
 
     def _discover_table_files(self, table):
         files = []
@@ -484,7 +647,7 @@ class ETLOrchestrator:
             completed += len(wave)
 
         elapsed = round(time.time() - start_parallel, 2)
-        self.logger.info("-" * 107)
+        self.logger.info("-" * 101)
         self.logger.info(
             f"PARALELISMO ADAPTATIVO FINALIZADO   | "
             f"arquivos={completed} | {elapsed}s"
@@ -544,7 +707,7 @@ class ETLOrchestrator:
         finally:
             if log_summary:
                 elapsed = round(time.time() - start_parallel, 2)
-                self.logger.info("-" * 107)
+                self.logger.info("-" * 101)
                 self.logger.info(
                     f"PARALELISMO FINALIZADO em {elapsed}s"
                 )
@@ -594,7 +757,7 @@ class ETLOrchestrator:
                     archive.extractall(target_dir)
 
                 self.logger.info(
-                    f"ZIP extraído | {zip_path.name} -> {target_dir}"
+                    f"ZIP extraído         | {zip_path.name} -> {target_dir}"
                 )
 
             except zipfile.BadZipFile:
@@ -681,11 +844,11 @@ class ETLOrchestrator:
     # =====================================================
     def _process_empresa(self):
 
-        self.logger.info("-" * 107)
+        self.logger.info("-" * 101)
         self.logger.info(
             "PROCESSANDO EMPRESA"
         )
-        self.logger.info("-" * 107)
+        self.logger.info("-" * 101)
 
         phase = self._start_phase("LOAD_EMPRESA", table_name="empresa")
 
@@ -766,11 +929,11 @@ class ETLOrchestrator:
     # =====================================================
     def _process_estabelecimento(self):
 
-        self.logger.info("-" * 107)
+        self.logger.info("-" * 101)
         self.logger.info(
             "PROCESSANDO ESTABELECIMENTO"
         )
-        self.logger.info("-" * 107)
+        self.logger.info("-" * 101)
 
         phase = self._start_phase("LOAD_ESTABELECIMENTO", table_name="estabelecimento")
 
@@ -873,11 +1036,11 @@ class ETLOrchestrator:
     # =====================================================
     def _process_socio(self):
 
-        self.logger.info("-" * 107)
+        self.logger.info("-" * 101)
         self.logger.info(
             "PROCESSANDO SOCIO"
         )
-        self.logger.info("-" * 107)
+        self.logger.info("-" * 101)
 
         phase = self._start_phase("LOAD_SOCIO", table_name="socio")
 
@@ -983,11 +1146,11 @@ class ETLOrchestrator:
 
         try:
 
-            self.logger.info("-" * 107)
+            self.logger.info("-" * 101)
             self.logger.info(
                 f"PROCESSANDO: {file_path.name}"
             )
-            self.logger.info("-" * 107)
+            self.logger.info("-" * 101)
 
             already_successful_in_current_run = (
                 self.run_id
@@ -1010,13 +1173,13 @@ class ETLOrchestrator:
 
             if already_successful_in_current_run:
                 self.logger.info(
-                    f"CHECKPOINT | arquivo ja concluido neste run: {file_path.name}"
+                    f"CHECKPOINT           | arquivo ja concluido neste run: {file_path.name}"
                 )
                 return
 
             if already_successful_checkpoint:
                 self.logger.info(
-                    f"CHECKPOINT | arquivo já processado com sucesso: {file_path.name}"
+                    f"CHECKPOINT   | arquivo já processado com sucesso: {file_path.name}"
                 )
                 if self.run_id:
                     skipped_progress = observability_repo.start_file_progress(
@@ -1104,12 +1267,6 @@ class ETLOrchestrator:
                         status="SUCCESS",
                         records_processed=total,
                     )
-                self.logger.info(
-                    f"FINALIZADO           | "
-                    f"{file_path.name} | "
-                    f"{total} registros | "
-                    f"{total_time}s"
-                )
                 return
 
             # =============================================
@@ -1231,12 +1388,6 @@ class ETLOrchestrator:
                 2
             )
 
-            self.logger.info(
-                f"FINALIZADO           | "
-                f"{file_path.name} | "
-                f"{total} registros | "
-                f"{total_time}s"
-            )
 
         except Exception as e:
 
@@ -1264,19 +1415,33 @@ class ETLOrchestrator:
                 )
 
             if execution:
-
-                execution_repo.failed(
-                    execution,
-                    str(e)
-                )
+                try:
+                    execution_repo.failed(
+                        execution,
+                        str(e)
+                    )
+                except Exception as status_error:
+                    # A conexao operacional costuma cair junto com a conexao
+                    # de carga. O erro de observabilidade nao pode substituir
+                    # a causa original, usada pelo DB recovery para retomar.
+                    self.logger.warning(
+                        "Falha ao registrar status FAILED da execucao ETL; "
+                        f"preservando erro original: {status_error}"
+                    )
 
             raise
 
         finally:
-
-            ops_db.close()
-
-            db.close()
+            _close_session_best_effort(
+                ops_db,
+                self.logger,
+                "operacional",
+            )
+            _close_session_best_effort(
+                db,
+                self.logger,
+                "de carga",
+            )
 
     # =====================================================
     # VALIDATION ROUTER
